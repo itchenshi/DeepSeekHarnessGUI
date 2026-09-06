@@ -1,0 +1,68 @@
+# Build DSH GUI for Windows / macOS / Linux and attach binaries to releases.
+# The GitHub-hosted runners provide the platform each dist script requires
+# (macOS dmg / Linux AppImage cannot be built on a Windows host — see README).
+name: Build All Platforms
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            script: dist:win
+            artifact: DSH-GUI-WIN
+          - os: macos-latest
+            script: dist:mac
+            artifact: DSH-GUI-MAC
+          - os: ubuntu-latest
+            script: dist:linux
+            artifact: DSH-GUI-LINUX
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (${{ matrix.script }})
+        run: npm run ${{ matrix.script }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            dist/*.zip
+            dist/*.exe
+            dist/*.dmg
+            dist/*.AppImage
+          if-no-files-found: error
+
+      - name: Attach to GitHub Release (tag builds only)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.zip
+            dist/*.exe
+            dist/*.dmg
+            dist/*.AppImage
+          overwrite: true
