@@ -2,6 +2,14 @@
 
 > DeepSeek Harness 桌面壳 —— 内嵌 Web UI、自动保持最新引擎、自带数据目录管理与系统托盘。
 
+[![English](https://img.shields.io/badge/README-English-green)](README.en.md)
+[![中文](https://img.shields.io/badge/README-中文-blue)](README.md)
+[![license](https://img.shields.io/github/license/itchenshi/DeepSeekHarnessGUI)](LICENSE)
+[![release](https://img.shields.io/github/v/release/itchenshi/DeepSeekHarnessGUI)](https://github.com/itchenshi/DeepSeekHarnessGUI/releases)
+[![stars](https://img.shields.io/github/stars/itchenshi/DeepSeekHarnessGUI)](https://github.com/itchenshi/DeepSeekHarnessGUI/stargazers)
+[![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)]()
+[![Gitee](https://img.shields.io/badge/Gitee-镜像仓库-red)](https://gitee.com/itchenshi/DeepSeekHarnessGUI)
+
 DSH GUI 是 [DeepSeek Harness](https://www.deepseek.com/harness/)（开源 Agent 框架，
 `@deepseek-ai/dsh`）的非官方桌面外壳。它把 Harness 的 Web UI 装进原生窗口中，
 开箱即用、常驻托盘、自动更新，而你依然拥有完整的 Harness 能力。
@@ -37,6 +45,15 @@ DSH GUI 是 [DeepSeek Harness](https://www.deepseek.com/harness/)（开源 Agent
   （品牌蓝 `#4D6BFE`），随包提供各尺寸。
 - **零额外配置的运行时**：免安装、免系统 Node 也可运行——打包时捆绑便携 Node
   （≥ v23，引擎 zstd 依赖）。
+
+## 📸 截图（待补充）
+
+> 替换下方占位：主窗口 / 设置窗口 / 托盘菜单 / 首次启动状态页。
+
+```
+主窗口截图  设置窗口截图
+托盘菜单截图  首次启动状态页截图
+```
 
 ## 🚀 快速开始
 
@@ -167,6 +184,10 @@ powershell -File scripts/smoke-modal.ps1              # 模态设置窗
   并确认迁移完成；备份/迁移/删除整包即可。
 - **与官方 CLI 的关系**：本壳只是启动器/外壳，运行的仍是官方
   `@deepseek-ai/dsh`；任何 Harness 能力问题请参考 [DeepSeek Harness 文档](https://deepseek-harness.github.io/deepseek-harness/guide/quickstart)。
+
+## 🏷 推荐 Topics（仓库元数据，已同步勾选于 GitHub「Settings → Topics」）
+
+`deepseek` · `deepseek-harness` · `electron` · `ai-agent` · `agent-framework` · `desktop-app` · `cross-platform` · `automation`
 
 ## 📄 许可
 
