@@ -39,7 +39,11 @@ const MATRIX = {
   "linux-x64": { os: "linux", arch: "x64", ext: "tar.gz" },
   "linux-arm64": { os: "linux", arch: "arm64", ext: "tar.gz" },
 };
-const KEY = `${process.platform}-${process.arch}`;
+// Allow cross-arch bundling (CI builds the x64 macOS app on an Apple Silicon
+// runner): DSH_NODE_PLATFORM / DSH_NODE_ARCH override the host platform/arch.
+const NODE_PLATFORM = process.env.DSH_NODE_PLATFORM || process.platform;
+const NODE_ARCH = process.env.DSH_NODE_ARCH || process.arch;
+const KEY = `${NODE_PLATFORM}-${NODE_ARCH}`;
 const entry = MATRIX[KEY];
 if (!entry) {
   console.error(`unsupported platform: ${KEY}`);

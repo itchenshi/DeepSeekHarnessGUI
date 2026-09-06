@@ -100,6 +100,7 @@ DeepSeek Harness 的全部用户数据都在 `$DSH_HOME`（默认 `~/.dsh`）下
 | `DSH_SHELL_AUTOQUIT_MS` | UI 加载成功后 N 毫秒优雅退出（CI / 冒烟测试） |
 | `DSH_SHELL_TEST_LATEST` / `DSH_SHELL_TEST_NOTICE` / `DSH_SHELL_TEST_OPEN_SETTINGS` | 测试钩子 |
 | `DSH_NODE_VERSION` / `DSH_NODE_MIRROR` | 打包时捆绑的 Node 版本与下载镜像 |
+| `DSH_NODE_ARCH` / `DSH_NODE_PLATFORM` | 覆盖捆绑 Node 的目标平台/架构（如 CI 在 Apple Silicon 上交叉打包 x64 macOS 应用时设 `DSH_NODE_ARCH=x64`） |
 
 ## 🛠 打包
 

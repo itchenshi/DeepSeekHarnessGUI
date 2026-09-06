@@ -29,14 +29,19 @@ jobs:
             os: macos-latest
             script: dist:mac:arm64
             artifact: DSH-GUI-MAC-ARM64
+            node_arch: ''
           - name: mac-x64
-            os: macos-13
+            # Cross-built on the Apple Silicon runner (x64 node bundled via
+            # DSH_NODE_ARCH); Intel-only runners are no longer reliable.
+            os: macos-latest
             script: dist:mac:x64
             artifact: DSH-GUI-MAC-X64
+            node_arch: x64
           - name: linux-x64
             os: ubuntu-latest
             script: dist:linux
             artifact: DSH-GUI-LINUX
+            node_arch: ''
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -53,6 +58,8 @@ jobs:
 
       - name: Build (${{ matrix.script }})
         run: npm run ${{ matrix.script }}
+        env:
+          DSH_NODE_ARCH: ${{ matrix.node_arch }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
