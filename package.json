@@ -13,6 +13,8 @@
     "fix:unpacked": "node scripts/fix-unpacked.mjs --force",
     "dist:win": "node scripts/make-icons.mjs && node scripts/bundle-node.mjs && electron-builder --win --publish never && node scripts/fix-unpacked.mjs --force",
     "dist:mac": "node scripts/make-icons.mjs && node scripts/bundle-node.mjs && electron-builder --mac --publish never && node scripts/fix-unpacked.mjs --force",
+    "dist:mac:x64": "node scripts/make-icons.mjs && node scripts/bundle-node.mjs && electron-builder --mac --x64 --publish never && node scripts/fix-unpacked.mjs --force",
+    "dist:mac:arm64": "node scripts/make-icons.mjs && node scripts/bundle-node.mjs && electron-builder --mac --arm64 --publish never && node scripts/fix-unpacked.mjs --force",
     "dist:linux": "node scripts/make-icons.mjs && node scripts/bundle-node.mjs && electron-builder --linux --publish never && node scripts/fix-unpacked.mjs --force",
     "dist": "node scripts/make-icons.mjs && node scripts/bundle-node.mjs && electron-builder --win --linux --publish never && node scripts/fix-unpacked.mjs --force"
   },
