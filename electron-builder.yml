@@ -1,0 +1,52 @@
+# electron-builder configuration for DSH GUI Shell.
+# Portable Node is bundled first: `npm run bundle:node` unpacks the current
+# platform's Node into resources/node, which extraResources ships with the app.
+# Icons are generated from the official harness favicon by `npm run make-icons`.
+
+appId: com.dsh.guishell
+productName: DSH GUI
+directories:
+  output: dist
+  buildResources: build
+
+# The packaged app only needs src + the semver prod dependency. The dsh
+# engine lives in userData/dsh-engine at runtime (installed by the app
+# itself), so it is deliberately NOT packaged here.
+files:
+  - src/**/*
+  - package.json
+
+# Do not run node-gyp rebuilds on the app's own deps (only semver, pure JS).
+npmRebuild: false
+
+# electron-builder's extraResources matcher drops node_modules, so the bundled
+# portable Node is copied in full by the afterPack hook instead.
+afterPack: scripts/after-pack.js
+
+win:
+  icon: build/icon.png
+  target:
+    - target: nsis
+      arch:
+        - x64
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+
+mac:
+  icon: build/icon.png
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+  category: public.app-category.developer-tools
+  # Signing/notarization needs a certificate; leave identity empty for now.
+
+linux:
+  icon: build/icons
+  target:
+    - AppImage
+  category: Development
+  maintainer: dsh-gui-shell

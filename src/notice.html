@@ -1,0 +1,55 @@
+<!doctype html>
+<html data-theme="dark" lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>更新通知</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 14px;
+      background: #0f151d;
+      border: 1px solid #2a3b4d;
+      border-radius: 12px;
+      color: #e6edf3;
+      font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+      user-select: none;
+      overflow: hidden;
+    }
+    [data-theme="light"] body { background: #ffffff; border-color: #d0d7de; color: #1f2328; }
+    .icon { font-size: 26px; color: #4d9fff; }
+    .text { flex: 1; min-width: 0; }
+    #t { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #s { font-size: 12px; color: #9fb3c8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px; }
+    [data-theme="light"] #s { color: #57606a; }
+    button {
+      border: none;
+      background: transparent;
+      color: #5c6b7a;
+      font-size: 16px;
+      cursor: pointer;
+      padding: 4px 6px;
+      border-radius: 6px;
+      line-height: 1;
+    }
+    button:hover { background: #1a2531; color: #e6edf3; }
+    [data-theme="light"] button { color: #57606a; }
+    [data-theme="light"] button:hover { background: #eef1f4; color: #1f2328; }
+  </style>
+</head>
+<body>
+  <div class="icon">✓</div>
+  <div class="text">
+    <div id="t">已更新</div>
+    <div id="s"></div>
+  </div>
+  <button onclick="window.close()" title="关闭">✕</button>
+  <script>
+    const theme = new URLSearchParams(location.search).get("theme");
+    if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+  </script>
+</body>
+</html>

@@ -1,0 +1,144 @@
+<!doctype html>
+<html data-theme="dark" lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>设置 — DSH GUI</title>
+  <style>
+    :root { color-scheme: dark; }
+    [data-theme="light"] { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 20px 24px 24px;
+      background: #0f151d;
+      color: #e6edf3;
+      font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+      font-size: 14px;
+    }
+    [data-theme="light"] body { background: #ffffff; color: #1f2328; }
+    h1 { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
+    .sub { color: #5c6b7a; font-size: 12px; margin: 0 0 18px; }
+    [data-theme="light"] .sub { color: #9aa0a6; }
+    section { margin-bottom: 20px; }
+    h2 {
+      font-size: 13px;
+      font-weight: 600;
+      color: #4d9fff;
+      margin: 0 0 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #1b2632;
+    }
+    [data-theme="light"] h2 { color: #4d6bfe; border-bottom-color: #eaeef2; }
+    .row { display: flex; align-items: flex-start; gap: 8px; margin: 7px 0; cursor: pointer; }
+    .row input[type="radio"], .row input[type="checkbox"] { margin-top: 3px; accent-color: #4d6bfe; cursor: pointer; }
+    .row label { cursor: pointer; }
+    .row .hint { color: #7a8ea0; font-size: 12px; display: block; margin-top: 2px; }
+    [data-theme="light"] .row .hint { color: #9aa0a6; }
+    .inline { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+    .inline input[type="number"] {
+      width: 90px;
+      background: #16202b;
+      border: 1px solid #2a3b4d;
+      color: #e6edf3;
+      border-radius: 6px;
+      padding: 6px 8px;
+      font-size: 13px;
+    }
+    [data-theme="light"] .inline input[type="number"] { background: #ffffff; border-color: #d0d7de; color: #1f2328; }
+    .inline span { color: #9fb3c8; }
+    [data-theme="light"] .inline span { color: #57606a; }
+    #saved { color: #4d9fff; font-size: 12px; min-height: 16px; margin-top: 10px; text-align: right; }
+  </style>
+</head>
+<body>
+  <h1>设置</h1>
+  <p class="sub">DSH GUI — 修改后自动保存</p>
+
+  <section>
+    <h2>更新</h2>
+    <div class="row"><input id="pol-auto" name="policy" type="radio" value="auto" /><label for="pol-auto">静默更新（每次使用最新版）</label></div>
+    <div class="row"><input id="pol-ask" name="policy" type="radio" value="ask" /><label for="pol-ask">询问后再更新（默认）</label></div>
+    <div class="row"><input id="pol-notify" name="policy" type="radio" value="notify" /><label for="pol-notify">仅提示，不自动更新</label></div>
+    <div class="row">
+      <input id="checkEnabled" type="checkbox" />
+      <label for="checkEnabled">启动时检查更新，并按间隔定期检查</label>
+    </div>
+    <div class="inline">
+      <span>检查间隔</span>
+      <input id="intervalHours" max="8760" min="1" step="1" type="number" />
+      <span>小时（1–8760）</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>数据目录</h2>
+    <div class="row">
+      <input id="home-system" name="homeMode" type="radio" value="system" />
+      <label for="home-system">跟随系统 ~/.dsh（默认）
+        <span class="hint">切换时若源目录有数据会询问是否移动</span>
+      </label>
+    </div>
+    <div class="row">
+      <input id="home-app" name="homeMode" type="radio" value="app" />
+      <label for="home-app">应用目录（设置 / 会话 / 工作区记录随应用携带）
+        <span class="hint">切换时若源目录有数据会询问是否移动</span>
+      </label>
+    </div>
+  </section>
+
+  <section>
+    <h2>关闭窗口</h2>
+    <div class="row"><input id="ca-tray" name="closeAction" type="radio" value="tray" /><label for="ca-tray">隐藏到托盘（默认，从托盘恢复）</label></div>
+    <div class="row"><input id="ca-quit" name="closeAction" type="radio" value="quit" /><label for="ca-quit">直接退出（关闭窗口即退出，托盘一并移除）</label></div>
+  </section>
+
+  <div id="saved"></div>
+
+  <script>
+    const api = window.dshSettings;
+
+    function paint(s) {
+      document.querySelectorAll('input[name="policy"]').forEach((el) => { el.checked = el.value === s.updatePolicy; });
+      document.getElementById("checkEnabled").checked = !!s.updateCheckEnabled;
+      document.getElementById("intervalHours").value = s.updateCheckIntervalHours;
+      document.querySelectorAll('input[name="homeMode"]').forEach((el) => { el.checked = el.value === s.dshHomeMode; });
+      document.querySelectorAll('input[name="closeAction"]').forEach((el) => { el.checked = el.value === s.closeAction; });
+    }
+
+    let flashTimer = null;
+    function flashSaved() {
+      const el = document.getElementById("saved");
+      el.textContent = "已保存";
+      clearTimeout(flashTimer);
+      flashTimer = setTimeout(() => { el.textContent = ""; }, 1200);
+    }
+
+    api.onChanged(paint);
+
+    api.get().then((s) => {
+      paint(s);
+      document.querySelectorAll('input[name="policy"]').forEach((el) => {
+        el.addEventListener("change", () => el.checked && api.set({ updatePolicy: el.value }).then(() => flashSaved()));
+      });
+      document.getElementById("checkEnabled").addEventListener("change", (e) => {
+        api.set({ updateCheckEnabled: e.target.checked }).then(() => flashSaved());
+      });
+      document.getElementById("intervalHours").addEventListener("change", (e) => {
+        const v = Number(e.target.value);
+        if (Number.isFinite(v) && v >= 1) api.set({ updateCheckIntervalHours: v }).then(() => flashSaved());
+        else api.get().then(paint);
+      });
+      document.querySelectorAll('input[name="homeMode"]').forEach((el) => {
+        el.addEventListener("change", () => el.checked && api.set({ dshHomeMode: el.value }).then(() => flashSaved()));
+      });
+      document.querySelectorAll('input[name="closeAction"]').forEach((el) => {
+        el.addEventListener("change", () => el.checked && api.set({ closeAction: el.value }).then(() => flashSaved()));
+      });
+    });
+
+    // Follow the theme the host resolved from DeepSeek Harness settings.yaml.
+    const theme = new URLSearchParams(location.search).get("theme");
+    if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+  </script>
+</body>
+</html>

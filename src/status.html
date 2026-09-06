@@ -1,0 +1,54 @@
+<!doctype html>
+<html data-theme="dark" lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>DeepSeek Harness</title>
+  <style>
+    :root { color-scheme: dark; }
+    [data-theme="light"] { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      background: #0b0f14;
+      color: #e6edf3;
+      font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+      user-select: none;
+    }
+    [data-theme="light"] body { background: #f0f2f5; color: #1f2328; }
+    h1 { font-size: 26px; font-weight: 600; letter-spacing: 0.5px; margin: 0; }
+    p#status { font-size: 16px; color: #9fb3c8; min-height: 1.4em; margin: 0; }
+    [data-theme="light"] p#status { color: #57606a; }
+    p#sub { font-size: 13px; color: #5c6b7a; min-height: 1.2em; margin: 0; max-width: 80vw; text-align: center; }
+    [data-theme="light"] p#sub { color: #9aa0a6; }
+    .spinner {
+      width: 34px; height: 34px;
+      border: 3px solid #1f2a36;
+      border-top-color: #4d9fff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    [data-theme="light"] .spinner { border-color: #d0d7de; border-top-color: #4d6bfe; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="spinner"></div>
+  <h1>DeepSeek Harness</h1>
+  <p id="status">正在检查版本…</p>
+  <p id="sub"></p>
+  <script>
+    // Follow the theme the host resolved from DeepSeek Harness settings.yaml.
+    const theme = new URLSearchParams(location.search).get("theme");
+    if (theme === "light" || theme === "dark") {
+      document.documentElement.dataset.theme = theme;
+      document.documentElement.style.colorScheme = theme;
+    }
+  </script>
+</body>
+</html>
