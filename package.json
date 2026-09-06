@@ -11,10 +11,10 @@
     "make-icons": "node scripts/make-icons.mjs",
     "bundle:node": "node scripts/bundle-node.mjs",
     "fix:unpacked": "node scripts/fix-unpacked.mjs --force",
-    "dist:win": "node scripts/make-icons.mjs && node scripts/bundle-node.mjs && electron-builder --win && node scripts/fix-unpacked.mjs --force",
-    "dist:mac": "node scripts/make-icons.mjs && node scripts/bundle-node.mjs && electron-builder --mac && node scripts/fix-unpacked.mjs --force",
-    "dist:linux": "node scripts/make-icons.mjs && node scripts/bundle-node.mjs && electron-builder --linux && node scripts/fix-unpacked.mjs --force",
-    "dist": "node scripts/make-icons.mjs && node scripts/bundle-node.mjs && electron-builder --win --linux && node scripts/fix-unpacked.mjs --force"
+    "dist:win": "node scripts/make-icons.mjs && node scripts/bundle-node.mjs && electron-builder --win --publish never && node scripts/fix-unpacked.mjs --force",
+    "dist:mac": "node scripts/make-icons.mjs && node scripts/bundle-node.mjs && electron-builder --mac --publish never && node scripts/fix-unpacked.mjs --force",
+    "dist:linux": "node scripts/make-icons.mjs && node scripts/bundle-node.mjs && electron-builder --linux --publish never && node scripts/fix-unpacked.mjs --force",
+    "dist": "node scripts/make-icons.mjs && node scripts/bundle-node.mjs && electron-builder --win --linux --publish never && node scripts/fix-unpacked.mjs --force"
   },
   "license": "MIT",
   "devDependencies": {
