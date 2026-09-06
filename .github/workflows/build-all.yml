@@ -65,4 +65,4 @@ jobs:
             dist/*.exe
             dist/*.dmg
             dist/*.AppImage
-          overwrite: true
+          overwrite_files: true
