@@ -1,6 +1,7 @@
 # 给 DeepSeek Harness 套了个壳：我为什么做一个开源的桌面端 DSH GUI
 
-> 项目地址：https://github.com/itchenshi/DeepSeekHarnessGUI（MIT License，非官方项目）
+> 项目地址：https://github.com/itchenshi/DeepSeekHarnessGUI（GitHub 主仓库，MIT License，非官方项目）
+> 国内镜像：https://gitee.com/itchenshi/DeepSeekHarnessGUI（Gitee 同步仓库）
 
 最近 DeepSeek 开源的 Agent 框架 **DeepSeek Harness**（技术预览阶段，`@deepseek-ai/dsh`）热度不小。它是一个能真正干活的编码 Agent：读/写工作区文件、跑命令、委派子任务、维护计划，还带 CLI、Python SDK 和一套不错的 Web UI。我用了一段时间，体验很惊艳，但工具链本身却总有一种「差最后一公里」的别扭感。
 
@@ -78,13 +79,14 @@ npm start
 
 首次启动会自动联网安装 DeepSeek Harness 引擎（1–2 分钟，状态页有进度），之后只有官方发新版本才会再次安装。
 
-**方式 B：直接用打包产物。** 在 [Releases](https://github.com/itchenshi/DeepSeekHarnessGUI/releases) 或 `dist/` 拿对应平台的包（Windows NSIS 安装包 / macOS dmg / Linux AppImage），解压即用，机器上连 Node 都可以没有。
+**方式 B：直接用打包产物。** 在 [Releases](https://github.com/itchenshi/DeepSeekHarnessGUI/releases) 或 `dist/` 拿对应平台的包（Windows NSIS 安装包 / macOS dmg / Linux AppImage），解压即用，机器上连 Node 都可以没有。国内读者也可以从 [Gitee 镜像仓库](https://gitee.com/itchenshi/DeepSeekHarnessGUI) 访问项目、下载源码（安装包以 GitHub Release 为准）。
 
 ## 六、最后说几句
 
 我一直觉得，现在的 AI 工具不缺「更强的模型」，缺的是「更体面的使用方式」。一个引擎再强，如果用户要在终端里折腾半小时才能跑起来，它就永远只是开发者的玩具。DeepSeek Harness 是个好引擎，DSH GUI 想做的，就是让它被更多人「无痛地」用起来。
 
-- 开源地址：https://github.com/itchenshi/DeepSeekHarnessGUI
+- 开源地址（GitHub）：https://github.com/itchenshi/DeepSeekHarnessGUI
+- 国内镜像（Gitee）：https://gitee.com/itchenshi/DeepSeekHarnessGUI
 - 许可：MIT，与 DeepSeek Harness 官方项目无隶属关系；
 - 如果它帮你省下了五分钟，欢迎点个 Star；如果你觉得哪里做得不对，欢迎开 issue。
 

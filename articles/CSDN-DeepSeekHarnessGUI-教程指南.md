@@ -1,6 +1,7 @@
 # 【开源】DSH GUI：DeepSeek Harness 桌面壳完整指南（内嵌 Web UI / 自动更新引擎 / 跨平台打包）
 
-> 项目地址：https://github.com/itchenshi/DeepSeekHarnessGUI
+> 项目地址：https://github.com/itchenshi/DeepSeekHarnessGUI（GitHub 主仓库）
+> 国内镜像：https://gitee.com/itchenshi/DeepSeekHarnessGUI（Gitee 同步仓库）
 > 开源许可：MIT（独立开源项目，与 DeepSeek Harness 官方项目无隶属关系）
 
 ## 目录
@@ -106,7 +107,7 @@ npm start          # 启动 DSH GUI
 
 ### 方式 B：使用打包产物（终端用户）
 
-在 [GitHub Releases](https://github.com/itchenshi/DeepSeekHarnessGUI/releases) 或本地 `dist/` 目录获取对应平台产物：
+在 [GitHub Releases](https://github.com/itchenshi/DeepSeekHarnessGUI/releases) 或本地 `dist/` 目录获取对应平台产物（国内用户也可从 [Gitee 镜像仓库](https://gitee.com/itchenshi/DeepSeekHarnessGUI) 克隆/下载源码）：
 
 | 平台 | 产物 |
 |---|---|
@@ -220,4 +221,4 @@ A：本壳只是启动器/外壳，运行的仍是官方 `@deepseek-ai/dsh`；�
 
 DSH GUI 把 DeepSeek Harness 的「最后一公里」补齐了：开箱即用的桌面体验、自动保持引擎最新、可控的数据目录与干净的会话生命周期。无论你是想在 Windows / macOS / Linux 上无痛使用 Harness 的终端用户，还是对 Electron 外壳 + 子进程托管 + 自动更新机制感兴趣的开发者，都值得 clone 下来看一看。
 
-如果本文对你有帮助，欢迎 **点赞 / 收藏 / 关注**，也欢迎去 GitHub 点个 Star 支持开源，有使用问题直接在 Issues 区反馈。
+如果本文对你有帮助，欢迎 **点赞 / 收藏 / 关注**，也欢迎去 [GitHub](https://github.com/itchenshi/DeepSeekHarnessGUI) / [Gitee 镜像](https://gitee.com/itchenshi/DeepSeekHarnessGUI) 点个 Star 支持开源，有使用问题直接在 Issues 区反馈。
