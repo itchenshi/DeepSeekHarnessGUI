@@ -8,7 +8,9 @@
 [![release](https://img.shields.io/github/v/release/itchenshi/DeepSeekHarnessGUI)](https://github.com/itchenshi/DeepSeekHarnessGUI/releases)
 [![stars](https://img.shields.io/github/stars/itchenshi/DeepSeekHarnessGUI)](https://github.com/itchenshi/DeepSeekHarnessGUI/stargazers)
 [![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)]()
+[![GitHub](https://img.shields.io/badge/GitHub-host-blue)](https://github.com/itchenshi/DeepSeekHarnessGUI)
 [![Gitee](https://img.shields.io/badge/Gitee-mirror-red)](https://gitee.com/itchenshi/DeepSeekHarnessGUI)
+[![GitCode](https://img.shields.io/badge/GitCode-mirror-green)](https://gitcode.com/itchenshi/DeepSeekHarnessGUI)
 
 DSH GUI is an **unofficial** desktop shell for [DeepSeek Harness](https://www.deepseek.com/harness/) (DeepSeek's open-source agent framework, `@deepseek-ai/dsh`, currently a technical preview). It wraps Harness's Web UI in a native window: out-of-the-box, tray-resident, self-updating — while keeping 100% of Harness's capabilities because the shell runs the official engine untouched.
 
@@ -21,6 +23,16 @@ DSH GUI is an **unofficial** desktop shell for [DeepSeek Harness](https://www.de
 │  └─ Data directory (default ~/.dsh, switchable & migratable) │
 └────────────────────────────────────────────┘
 ```
+
+## 🔗 Repositories
+
+| Platform | URL | Clone |
+|---|---|---|
+| GitHub (primary) | https://github.com/itchenshi/DeepSeekHarnessGUI | `git clone https://github.com/itchenshi/DeepSeekHarnessGUI.git` |
+| Gitee (mirror) | https://gitee.com/itchenshi/DeepSeekHarnessGUI | `git clone https://gitee.com/itchenshi/DeepSeekHarnessGUI.git` |
+| GitCode (mirror) | https://gitcode.com/itchenshi/DeepSeekHarnessGUI | `git clone https://gitcode.com/itchenshi/DeepSeekHarnessGUI.git` |
+
+All three repositories are kept in sync; installers are published on [GitHub Releases](https://github.com/itchenshi/DeepSeekHarnessGUI/releases).
 
 ## ✨ Features
 

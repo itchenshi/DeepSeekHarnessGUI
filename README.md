@@ -8,7 +8,9 @@
 [![release](https://img.shields.io/github/v/release/itchenshi/DeepSeekHarnessGUI)](https://github.com/itchenshi/DeepSeekHarnessGUI/releases)
 [![stars](https://img.shields.io/github/stars/itchenshi/DeepSeekHarnessGUI)](https://github.com/itchenshi/DeepSeekHarnessGUI/stargazers)
 [![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)]()
-[![Gitee](https://img.shields.io/badge/Gitee-镜像仓库-red)](https://gitee.com/itchenshi/DeepSeekHarnessGUI)
+[![GitHub](https://img.shields.io/badge/GitHub-host-blue)](https://github.com/itchenshi/DeepSeekHarnessGUI)
+[![Gitee](https://img.shields.io/badge/Gitee-mirror-red)](https://gitee.com/itchenshi/DeepSeekHarnessGUI)
+[![GitCode](https://img.shields.io/badge/GitCode-mirror-green)](https://gitcode.com/itchenshi/DeepSeekHarnessGUI)
 
 DSH GUI 是 [DeepSeek Harness](https://www.deepseek.com/harness/)（开源 Agent 框架，
 `@deepseek-ai/dsh`）的非官方桌面外壳。它把 Harness 的 Web UI 装进原生窗口中，
@@ -23,6 +25,16 @@ DSH GUI 是 [DeepSeek Harness](https://www.deepseek.com/harness/)（开源 Agent
 │  └─ 数据目录 (默认 ~/.dsh，可切换并迁移)     │
 └────────────────────────────────────────────┘
 ```
+
+## 🔗 多平台仓库
+
+| 平台 | 地址 | 克隆 |
+|---|---|---|
+| GitHub（主仓库） | https://github.com/itchenshi/DeepSeekHarnessGUI | `git clone https://github.com/itchenshi/DeepSeekHarnessGUI.git` |
+| Gitee（镜像） | https://gitee.com/itchenshi/DeepSeekHarnessGUI | `git clone https://gitee.com/itchenshi/DeepSeekHarnessGUI.git` |
+| GitCode（镜像） | https://gitcode.com/itchenshi/DeepSeekHarnessGUI | `git clone https://gitcode.com/itchenshi/DeepSeekHarnessGUI.git` |
+
+三平台代码同步更新；安装包以 [GitHub Releases](https://github.com/itchenshi/DeepSeekHarnessGUI/releases) 为准。
 
 ## ✨ 特性
 
