@@ -162,11 +162,20 @@ if ($NoRelease) {
 
 $notes = ''
 if ($NotesFile -and (Test-Path $NotesFile)) {
-  $notes = Get-Content $NotesFile -Raw
+  # Read as UTF-8 explicitly; PowerShell 5.1 defaults to ANSI/GBK and would
+  # garble a UTF-8 changelog (observable as mojibake on Gitee/GitCode).
+  $notes = Get-Content $NotesFile -Raw -Encoding UTF8
 }
 if (-not $notes) {
   $notes = "DSH GUI $version`n`nRelease artifacts: $($assets.Name -join ', ')"
 }
+
+# The body must reach curl as raw UTF-8 bytes. Passing it through a PS 5.1
+# string argument re-encodes it with the system ANSI codepage (mojibake), so we
+# stage an UTF-8 (no BOM) temp file and feed it to curl via --data-urlencode
+# "body@<file>", which curl reads byte-for-byte.
+$bodyFile = Join-Path $env:TEMP "publish-body-$Tag.txt"
+[System.IO.File]::WriteAllText($bodyFile, $notes, (New-Object System.Text.UTF8Encoding($false)))
 
 function Publish-GiteeLikeRelease {
   param(
@@ -176,32 +185,55 @@ function Publish-GiteeLikeRelease {
     [string]$Token,
     [string]$Tag,
     [string]$Name,
-    [string]$Body,
+    [string]$BodyFile,
     [array]$AssetFiles,
-    [string]$Label
+    [string]$Label,
+    [bool]$SupportsAttachments = $true
   )
   if (-not $Token) { Write-Warn "${Label}: no token, skipping publish"; return }
   $releaseUrl = "$ApiBase/repos/$Owner/$Repo/releases"
-  $headers = @{ 'Content-Type' = 'application/json;charset=UTF-8' }
-  $payload = @{
-    access_token = $Token
-    tag_name     = $Tag
-    name         = $Name
-    body         = $Body
-    prerelease   = $false
-  } | ConvertTo-Json
 
-  try {
-    $release = Invoke-RestMethod -Method Post -Uri $releaseUrl -Headers $headers -Body $payload
-    $releaseId = $release.id
-    Write-Ok "${Label}: release created (id ${releaseId})"
-  }
-  catch {
-    # Gitee-like APIs return an error when the tag release already exists;
-    # reuse the existing release instead of failing the whole run.
-    Write-Warn "${Label}: create failed ($($_.Exception.Message)) - trying to reuse existing release"
+  # Gitee/GitCode v5 accept releases via form-urlencoded (application/json is
+  # rejected with a bare 400 on both platforms), so create with curl --data-urlencode.
+  # The body is read from an UTF-8 temp file (BodyFile) so non-ASCII text is
+  # preserved exactly.
+  $createOut = & curl.exe -sS -f -X POST $releaseUrl `
+    --data-urlencode "access_token=$Token" `
+    --data-urlencode "tag_name=$Tag" `
+    --data-urlencode "target_commitish=master" `
+    --data-urlencode "name=$Name" `
+    --data-urlencode "body@$BodyFile" `
+    --data-urlencode "prerelease=false" 2>&1
+  $createCode = $LASTEXITCODE
+
+  $releaseId = $null
+  if ($createCode -eq 0) {
     try {
-      $existing = Invoke-RestMethod -Method Get -Uri $releaseUrl -Headers @{ 'Content-Type' = 'application/json;charset=UTF-8' }
+      $release = $createOut | ConvertFrom-Json
+      $releaseId = $release.id
+      if ($releaseId) {
+        Write-Ok "${Label}: release created (id ${releaseId})"
+      }
+      else {
+        Write-Warn "${Label}: create returned no id ($createOut) - treating as existing"
+      }
+    }
+    catch {
+      Write-Warn "${Label}: create response parse failed: $createOut"
+    }
+  }
+  else {
+    Write-Warn "${Label}: create failed (exit ${createCode}): $createOut"
+  }
+
+  if (-not $releaseId) {
+    # The tag release may already exist; reuse it instead of failing the run.
+    Write-Warn "${Label}: trying to reuse existing release"
+    try {
+      # NOTE: the `?` must be backtick-escaped inside the interpolated string,
+      # otherwise PowerShell 5.1 parses `$releaseUrl?` as a drive-qualified
+      # variable and mangles the resulting URI.
+      $existing = Invoke-RestMethod -Method Get -Uri "${releaseUrl}`?access_token=$Token" -Headers @{ 'Content-Type' = 'application/json;charset=UTF-8' }
       $releaseId = ($existing | Where-Object { $_.tag_name -eq $Tag } | Select-Object -First 1).id
       if (-not $releaseId) { throw "release $Tag not found on ${Label}" }
       Write-Ok "${Label}: reusing existing release (id ${releaseId})"
@@ -212,9 +244,13 @@ function Publish-GiteeLikeRelease {
   }
 
   foreach ($asset in $AssetFiles) {
+    if (-not $SupportsAttachments) {
+      Write-Warn "${Label}: platform does not support release attachments - skipping asset uploads (installers are downloadable from GitHub Releases)"
+      break
+    }
     Write-Step "${Label}: uploading $($asset.Name)"
     $uploadUrl = "$ApiBase/repos/$Owner/$Repo/releases/$releaseId/attach_files"
-    $err = & curl.exe -sS -X POST $uploadUrl -F "access_token=$Token" -F "file=@$($asset.FullName)" 2>&1
+    $err = & curl.exe -sS -f -X POST $uploadUrl -F "access_token=$Token" -F "file=@$($asset.FullName)" 2>&1
     if ($LASTEXITCODE -ne 0) {
       Write-Warn "${Label}: upload failed for $($asset.Name): $err"
     }
@@ -231,7 +267,7 @@ function Publish-GitHubRelease {
     [string]$Token,
     [string]$Tag,
     [string]$Name,
-    [string]$Body,
+    [string]$BodyFile,
     [array]$AssetFiles,
     [string]$Label
   )
@@ -260,11 +296,10 @@ function Publish-GitHubRelease {
   if ($useGh) {
     $assetArgs = @()
     foreach ($a in $AssetFiles) { $assetArgs += $a.FullName }
-    # -R owner/repo, create with notes from a temp file to avoid quoting issues
-    $notesPath = Join-Path $env:TEMP "gh-notes-$Tag.txt"
-    Set-Content -Path $notesPath -Value $Body -Encoding utf8
     try {
-      & gh release create $Tag -R "$Owner/$Repo" --title $Name --notes-file $notesPath @assetArgs 2>&1 | ForEach-Object { Write-Step "${Label}: $_" }
+      # notes are read from the staged UTF-8 BodyFile (gh --notes-file), so
+      # non-ASCII release notes stay intact.
+      & gh release create $Tag -R "$Owner/$Repo" --title $Name --notes-file $BodyFile @assetArgs 2>&1 | ForEach-Object { Write-Step "${Label}: $_" }
       if ($LASTEXITCODE -ne 0) { throw "gh release create failed (exit $LASTEXITCODE)" }
       Write-Ok "${Label}: release $Tag published via gh"
     }
@@ -277,12 +312,12 @@ function Publish-GitHubRelease {
       if ($LASTEXITCODE -ne 0) { throw "gh release upload failed (exit $LASTEXITCODE)" }
       Write-Ok "${Label}: assets uploaded to existing release $Tag"
     }
-    finally {
-      Remove-Item $notesPath -Force -ErrorAction SilentlyContinue
-    }
     return
   }
 
+  # API path: read the notes as UTF-8 from the staged file (PowerShell 5.1
+  # string interpolation would re-encode to ANSI when building the JSON).
+  $bodyText = Get-Content -Raw -Encoding UTF8 $BodyFile
   $headers = @{
     Authorization  = "Bearer $Token"
     Accept         = 'application/vnd.github+json'
@@ -291,7 +326,7 @@ function Publish-GitHubRelease {
   $payload = @{
     tag_name   = $Tag
     name       = $Name
-    body       = $Body
+    body       = $bodyText
     draft      = $false
     prerelease = $false
   } | ConvertTo-Json
@@ -342,15 +377,47 @@ $repo  = 'DeepSeekHarnessGUI'
 Write-Step "publishing release $tag to GitHub / Gitee / GitCode"
 Write-Ok "assets: $($assets.Name -join ', ')"
 
-Publish-GitHubRelease -Owner $owner -Repo $repo -Token $secrets['GITHUB_TOKEN'] `
-  -Tag $tag -Name $releaseName -Body $notes -AssetFiles $assets -Label 'GitHub'
+# Each platform runs independently: a failure on one platform must not stop
+# the others, so every publish is wrapped in its own try/catch below.
+$failedPlatforms = @()
 
-Publish-GiteeLikeRelease -ApiBase 'https://gitee.com/api/v5' -Owner $owner -Repo $repo `
-  -Token $secrets['GITEE_TOKEN'] -Tag $tag -Name $releaseName -Body $notes `
-  -AssetFiles $assets -Label 'Gitee'
+try {
+  Publish-GitHubRelease -Owner $owner -Repo $repo -Token $secrets['GITHUB_TOKEN'] `
+    -Tag $tag -Name $releaseName -BodyFile $bodyFile -AssetFiles $assets -Label 'GitHub'
+}
+catch {
+  Write-Warn "GitHub publish failed: $($_.Exception.Message)"
+  $failedPlatforms += 'GitHub'
+}
 
-Publish-GiteeLikeRelease -ApiBase 'https://api.gitcode.com/api/v5' -Owner $owner -Repo $repo `
-  -Token $secrets['GITCODE_TOKEN'] -Tag $tag -Name $releaseName -Body $notes `
-  -AssetFiles $assets -Label 'GitCode'
+try {
+  Publish-GiteeLikeRelease -ApiBase 'https://gitee.com/api/v5' -Owner $owner -Repo $repo `
+    -Token $secrets['GITEE_TOKEN'] -Tag $tag -Name $releaseName -BodyFile $bodyFile `
+    -AssetFiles $assets -Label 'Gitee'
+}
+catch {
+  Write-Warn "Gitee publish failed: $($_.Exception.Message)"
+  $failedPlatforms += 'Gitee'
+}
 
+try {
+  # GitCode releases do NOT support attachment uploads, so the body carries
+  # the changelog plus a pointer to GitHub Releases for the installers; stage
+  # that variant as its own UTF-8 file so non-ASCII notes survive.
+  $gitcodeBodyFile = Join-Path $env:TEMP "publish-gitcode-body-$Tag.txt"
+  $gitcodeNotes = $notes + "`n`n---`nInstallers: download from GitHub Releases - https://github.com/$owner/$repo/releases/tag/$tag"
+  [System.IO.File]::WriteAllText($gitcodeBodyFile, $gitcodeNotes, (New-Object System.Text.UTF8Encoding($false)))
+  Publish-GiteeLikeRelease -ApiBase 'https://api.gitcode.com/api/v5' -Owner $owner -Repo $repo `
+    -Token $secrets['GITCODE_TOKEN'] -Tag $tag -Name $releaseName -BodyFile $gitcodeBodyFile `
+    -AssetFiles $assets -Label 'GitCode' -SupportsAttachments $false
+}
+catch {
+  Write-Warn "GitCode publish failed: $($_.Exception.Message)"
+  $failedPlatforms += 'GitCode'
+}
+
+if ($failedPlatforms.Count -gt 0) {
+  Write-Warn "release $tag published with failures on: $($failedPlatforms -join ', ')"
+  exit 1
+}
 Write-Ok "release $tag published (see per-platform results above)"
