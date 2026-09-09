@@ -206,6 +206,8 @@ DeepSeek Harness 的全部用户数据都在 `$DSH_HOME`（默认 `~/.dsh`）下
 │  ├─ fix-unpacked.mjs    # 改名 + 生成 zip
 │  ├─ after-pack.js       # electron-builder 钩子：完整拷贝捆绑 Node
 │  └─ smoke-close.ps1、smoke-modal.ps1   # Windows E2E 冒烟
+├─ marketing/            # 营销物料（按版本分目录 v0.1.0 / v0.2.0 / …）
+│  └─ v0.2.0/            # CSDN/知乎文章、推广文案包、B 站视频脚本
 ├─ resources/icons/       # 官网 favicon 源文件（svg/ico）
 ├─ electron-builder.yml   # 打包配置（win/mac/linux）
 └─ dist/                  # 构建产物（已 gitignore）

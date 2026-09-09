@@ -176,6 +176,8 @@ All DeepSeek Harness user data lives under `$DSH_HOME` (default `~/.dsh`):
 │  ├─ fix-unpacked.mjs    # rename + generate zip
 │  ├─ after-pack.js       # electron-builder hook: ship the bundled Node in full
 │  └─ smoke-close.ps1、smoke-modal.ps1   # Windows E2E smoke tests
+├─ marketing/            # marketing assets (versioned dirs: v0.1.0 / v0.2.0 / …)
+│  └─ v0.2.0/            # CSDN/Zhihu articles, promo copy pack, Bilibili script
 ├─ resources/icons/       # official favicon sources (svg/ico)
 ├─ electron-builder.yml   # packaging config (win/mac/linux)
 └─ dist/                  # build output (gitignored)
