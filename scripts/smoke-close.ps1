@@ -26,7 +26,7 @@ $log = Join-Path $env:TEMP ("dsh-e2e-" + $Mode + "-" + [guid]::NewGuid().ToStrin
 $errLog = $log + ".err"
 
 # Preseed closeAction (keep everything else minimal).
-$json = @{ updatePolicy = "ask"; dshHomeMode = "system"; updateCheckEnabled = $true; updateCheckIntervalHours = 1; closeAction = $Mode } | ConvertTo-Json
+$json = @{ updatePolicy = "ask"; dshHomeMode = "system"; updateCheckEnabled = $true; closeAction = $Mode } | ConvertTo-Json
 [System.IO.File]::WriteAllText((Join-Path $ud "settings.json"), $json, [System.Text.UTF8Encoding]::new($false))
 
 $env:DSH_SHELL_USERDATA = $ud

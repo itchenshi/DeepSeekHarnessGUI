@@ -40,15 +40,18 @@
 <body>
   <div class="spinner"></div>
   <h1>DeepSeek Harness</h1>
-  <p id="status">正在检查版本…</p>
+  <p id="status"></p>
   <p id="sub"></p>
   <script>
     // Follow the theme the host resolved from DeepSeek Harness settings.yaml.
-    const theme = new URLSearchParams(location.search).get("theme");
+    const params = new URLSearchParams(location.search);
+    const theme = params.get("theme");
     if (theme === "light" || theme === "dark") {
       document.documentElement.dataset.theme = theme;
       document.documentElement.style.colorScheme = theme;
     }
+    document.getElementById("status").textContent = params.get("lang") === "en" ? "Checking for updates…" : "正在检查版本…";
+    document.documentElement.lang = params.get("lang") === "en" ? "en" : "zh-CN";
   </script>
 </body>
 </html>

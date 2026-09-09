@@ -9,130 +9,514 @@
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      padding: 20px 24px 24px;
+      padding: 10px 20px 12px;
       background: #0f151d;
       color: #e6edf3;
       font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
-      font-size: 14px;
+      font-size: 13px;
+      overflow-y: auto;
     }
     [data-theme="light"] body { background: #ffffff; color: #1f2328; }
-    h1 { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
-    .sub { color: #5c6b7a; font-size: 12px; margin: 0 0 18px; }
+    h1 { font-size: 15px; font-weight: 600; margin: 0 0 2px; }
+    .sub { color: #5c6b7a; font-size: 12px; margin: 0 0 8px; }
     [data-theme="light"] .sub { color: #9aa0a6; }
-    section { margin-bottom: 20px; }
+    /* 双列栅格：短分组（语言/数据目录/关闭/会话）两两一行，长分组（引擎更新/
+       第三方插件）左右平衡，尽量让笔记本一屏放满。 */
+    main.colgrid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 6px 20px;
+      align-items: start;
+      margin-top: 8px;
+    }
+    section { min-width: 0; }
     h2 {
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 600;
       color: #4d9fff;
-      margin: 0 0 10px;
-      padding-bottom: 6px;
+      margin: 0 0 4px;
+      padding-bottom: 3px;
       border-bottom: 1px solid #1b2632;
     }
     [data-theme="light"] h2 { color: #4d6bfe; border-bottom-color: #eaeef2; }
-    .row { display: flex; align-items: flex-start; gap: 8px; margin: 7px 0; cursor: pointer; }
-    .row input[type="radio"], .row input[type="checkbox"] { margin-top: 3px; accent-color: #4d6bfe; cursor: pointer; }
-    .row label { cursor: pointer; }
-    .row .hint { color: #7a8ea0; font-size: 12px; display: block; margin-top: 2px; }
-    [data-theme="light"] .row .hint { color: #9aa0a6; }
-    .inline { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
-    .inline input[type="number"] {
-      width: 90px;
-      background: #16202b;
-      border: 1px solid #2a3b4d;
-      color: #e6edf3;
-      border-radius: 6px;
-      padding: 6px 8px;
-      font-size: 13px;
+    .optrow {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      column-gap: 10px;
+      row-gap: 2px;
+      margin: 1px 0 3px;
     }
-    [data-theme="light"] .inline input[type="number"] { background: #ffffff; border-color: #d0d7de; color: #1f2328; }
-    .inline span { color: #9fb3c8; }
-    [data-theme="light"] .inline span { color: #57606a; }
-    #saved { color: #4d9fff; font-size: 12px; min-height: 16px; margin-top: 10px; text-align: right; }
+    .optrow label {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      line-height: 19px;
+    }
+    .optrow input { margin: 0; accent-color: #4d6bfe; cursor: pointer; }
+    .stack label { display: flex; align-items: flex-start; gap: 7px; cursor: pointer; margin: 2px 0; }
+    .stack input { margin: 2px 0 0; accent-color: #4d6bfe; cursor: pointer; flex: none; }
+    .hint {
+      color: #7a8ea0;
+      font-size: 11px;
+      line-height: 14px;
+      display: block;
+      margin: 0 0 5px;
+    }
+    [data-theme="light"] .hint { color: #9aa0a6; }
+    #checkRow { display: flex; align-items: center; gap: 10px; margin-top: 3px; flex-wrap: wrap; }
+    button.dsh-btn {
+      font: inherit;
+      font-size: 12px;
+      padding: 3px 12px;
+      border-radius: 6px;
+      border: 1px solid #31415a;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    [data-theme="light"] button.dsh-btn { border-color: #d0d7de; }
+    button.dsh-btn:disabled { opacity: 0.6; cursor: default; }
+    #curEngine { font-size: 12px; opacity: 0.8; }
+    #saved { color: #4d9fff; font-size: 12px; min-height: 14px; margin-top: 2px; text-align: right; }
   </style>
 </head>
 <body>
-  <h1>设置</h1>
-  <p class="sub">DSH GUI — 修改后自动保存</p>
+  <h1 data-i18n="settings.title"></h1>
+  <p class="sub" data-i18n="settings.autoSave"></p>
 
-  <section>
-    <h2>更新</h2>
-    <div class="row"><input id="pol-auto" name="policy" type="radio" value="auto" /><label for="pol-auto">静默更新（每次使用最新版）</label></div>
-    <div class="row"><input id="pol-ask" name="policy" type="radio" value="ask" /><label for="pol-ask">询问后再更新（默认）</label></div>
-    <div class="row"><input id="pol-notify" name="policy" type="radio" value="notify" /><label for="pol-notify">仅提示，不自动更新</label></div>
-    <div class="row">
-      <input id="checkEnabled" type="checkbox" />
-      <label for="checkEnabled">启动时检查更新，并按间隔定期检查</label>
-    </div>
-    <div class="inline">
-      <span>检查间隔</span>
-      <input id="intervalHours" max="8760" min="1" step="1" type="number" />
-      <span>小时（1–8760）</span>
-    </div>
-  </section>
+  <main class="colgrid">
+    <section>
+      <h2 data-i18n="settings.language"></h2>
+      <div class="optrow">
+        <label><input name="locale" type="radio" value="system" /><span data-i18n="settings.locale.system"></span></label>
+        <label><input name="locale" type="radio" value="zh" /><span>中文</span></label>
+        <label><input name="locale" type="radio" value="en" /><span>English</span></label>
+      </div>
+      <span class="hint" data-i18n="settings.language.hint"></span>
+    </section>
 
-  <section>
-    <h2>数据目录</h2>
-    <div class="row">
-      <input id="home-system" name="homeMode" type="radio" value="system" />
-      <label for="home-system">跟随系统 ~/.dsh（默认）
-        <span class="hint">切换时若源目录有数据会询问是否移动</span>
-      </label>
-    </div>
-    <div class="row">
-      <input id="home-app" name="homeMode" type="radio" value="app" />
-      <label for="home-app">应用目录（设置 / 会话 / 工作区记录随应用携带）
-        <span class="hint">切换时若源目录有数据会询问是否移动</span>
-      </label>
-    </div>
-  </section>
+    <section>
+      <h2 data-i18n="settings.dataDir"></h2>
+      <div class="stack">
+        <label>
+          <input name="homeMode" type="radio" value="system" />
+          <span>
+            <span data-i18n="settings.home.system"></span><br />
+            <span class="hint" style="margin:0;" data-i18n="settings.home.moveHint"></span>
+          </span>
+        </label>
+        <label>
+          <input name="homeMode" type="radio" value="app" />
+          <span>
+            <span data-i18n="settings.home.app"></span><br />
+            <span class="hint" style="margin:0;" data-i18n="settings.home.moveHint"></span>
+          </span>
+        </label>
+      </div>
+    </section>
 
-  <section>
-    <h2>关闭窗口</h2>
-    <div class="row"><input id="ca-tray" name="closeAction" type="radio" value="tray" /><label for="ca-tray">隐藏到托盘（默认，从托盘恢复）</label></div>
-    <div class="row"><input id="ca-quit" name="closeAction" type="radio" value="quit" /><label for="ca-quit">直接退出（关闭窗口即退出，托盘一并移除）</label></div>
-  </section>
+    <section>
+      <h2 data-i18n="settings.close"></h2>
+      <div class="optrow">
+        <label><input name="closeAction" type="radio" value="tray" /><span data-i18n="settings.close.tray"></span></label>
+        <label><input name="closeAction" type="radio" value="quit" /><span data-i18n="settings.close.quit"></span></label>
+      </div>
+    </section>
+
+    <section>
+      <h2 data-i18n="settings.session"></h2>
+      <div class="stack">
+        <label>
+          <input id="autoRestore" type="checkbox" />
+          <span>
+            <span data-i18n="settings.autoRestore"></span><br />
+            <span class="hint" style="margin:0;" data-i18n="settings.autoRestore.hint"></span>
+          </span>
+        </label>
+      </div>
+    </section>
+
+    <section>
+      <h2 data-i18n="settings.engineUpdate"></h2>
+      <div class="sub" style="margin-bottom:6px;" data-i18n="settings.engineUpdate.sub"></div>
+      <div class="optrow">
+        <span style="opacity:0.75;margin-right:2px;" data-i18n="settings.update.policy"></span>
+        <label><input name="updatePolicy" type="radio" value="auto" /><span data-i18n="settings.update.policy.auto"></span></label>
+        <label><input name="updatePolicy" type="radio" value="ask" /><span data-i18n="settings.update.policy.ask"></span></label>
+        <label><input name="updatePolicy" type="radio" value="notify" /><span data-i18n="settings.update.policy.notify"></span></label>
+      </div>
+      <div class="optrow">
+        <span style="opacity:0.75;margin-right:2px;" data-i18n="settings.update.channel"></span>
+        <label><input name="updateChannel" type="radio" value="npm" /><span data-i18n="settings.update.channel.npm"></span></label>
+        <label><input name="updateChannel" type="radio" value="rc" /><span data-i18n="settings.update.channel.rc"></span></label>
+        <label><input name="updateChannel" type="radio" value="all" /><span data-i18n="settings.update.channel.all"></span></label>
+      </div>
+      <div class="stack" style="margin-top:2px;">
+        <label>
+          <input id="updateAutoCheck" type="checkbox" />
+          <span>
+            <span data-i18n="settings.update.autoCheck"></span><br />
+            <span class="hint" style="margin:0;" data-i18n="settings.update.autoCheck.hint"></span>
+          </span>
+        </label>
+      </div>
+      <div id="checkRow">
+        <button id="btnCheckUpdate" type="button" class="dsh-btn">
+          <span data-i18n="settings.update.checkNow"></span>
+        </button>
+        <span id="curEngine"></span>
+      </div>
+    </section>
+
+    <section>
+      <h2 data-i18n="settings.plugins"></h2>
+      <div class="sub" style="margin-bottom:6px;" data-i18n="settings.plugins.sub"></div>
+      <div id="pluginList"></div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:4px;flex-wrap:wrap;">
+        <button id="btnSyncPlugins" type="button" class="dsh-btn">
+          <span data-i18n="settings.plugins.sync"></span>
+        </button>
+        <button id="btnRestartEngine" type="button" class="dsh-btn">
+          <span data-i18n="settings.plugins.restart"></span>
+        </button>
+        <span id="pluginMsg" style="font-size:12px;opacity:0.85;"></span>
+      </div>
+      <span class="hint" data-i18n="settings.plugins.restartHint"></span>
+    </section>
+  </main>
 
   <div id="saved"></div>
 
   <script>
     const api = window.dshSettings;
 
+    // 与主进程 UI_STRINGS 保持一致的界面文案（设置窗口专用键）。
+    const I18N = {
+      zh: {
+        "settings.title": "设置",
+        "settings.autoSave": "DSH GUI — 修改后自动保存",
+        "settings.language": "语言",
+        "settings.locale.system": "跟随系统（默认）",
+        "settings.language.hint": "界面语言会同时应用到 Harness 页面（内嵌引擎界面）",
+        "settings.dataDir": "数据目录",
+        "settings.home.system": "跟随系统 ~/.dsh（默认）",
+        "settings.home.app": "应用目录（设置 / 会话 / 工作区记录随应用携带）",
+        "settings.home.moveHint": "切换时若源目录有数据会询问是否移动",
+        "settings.close": "关闭窗口",
+        "settings.close.tray": "隐藏到托盘（默认，从托盘恢复）",
+        "settings.close.quit": "直接退出（关闭窗口即退出，托盘一并移除）",
+        "settings.session": "会话",
+        "settings.autoRestore": "启动后自动回到最近一次对话（关闭后每次启动从空白/新会话开始）",
+        "settings.autoRestore.hint": "记录你最后打开/使用的会话，重启 DeepSeek Harness 后自动切回",
+        "settings.engineUpdate": "引擎（dsh）更新",
+        "settings.engineUpdate.sub": "由 DSH GUI 管理引擎的自动更新：更新策略 / 版本通道 / 自动检查。检查频率固定为 30 分钟，发现新版后按策略静默安装、询问或仅提示。",
+        "settings.update.policy": "更新策略",
+        "settings.update.policy.auto": "静默更新（每次使用最新版）",
+        "settings.update.policy.ask": "询问后再更新（默认）",
+        "settings.update.policy.notify": "仅提示，不自动更新",
+        "settings.update.channel": "版本通道",
+        "settings.update.channel.npm": "跟随 npm latest 标签",
+        "settings.update.channel.rc": "跳过 alpha（rc/正式版最高）",
+        "settings.update.channel.all": "最新版（含 alpha/beta/rc 预发布）",
+        "settings.update.autoCheck": "自动检查引擎更新",
+        "settings.update.autoCheck.hint": "启动时与运行中每 30 分钟检查一次；关闭后不查询 registry，直接用本地引擎",
+        "settings.update.checkNow": "立即检查引擎更新",
+        "settings.plugins": "第三方插件（启动时自动安装）",
+        "settings.plugins.sub": "勾选后，DSH GUI 每次启动会用引擎自带的 `dsh plugin` 把这些社区插件安装并挂载到 Harness Web（npm 包需可访问网络）。运行中的引擎需重启后才加载新插件；卸载请用 dsh-market 或 `dsh plugin remove` 手动处理。第三方插件等于以你的权限运行第三方代码——默认关闭，勾选前请自行审阅源码。",
+        "settings.plugins.sync": "立即安装已勾选项",
+        "settings.plugins.syncing": "安装中…",
+        "settings.plugins.installed": "已安装 v{0}",
+        "settings.plugins.notInstalled": "未安装（下次启动自动装）",
+        "settings.plugins.done": "完成：新装 {0}，失败 {1}",
+        "settings.plugins.failed": "失败：{0}",
+        "settings.plugins.restart": "重启引擎使生效",
+        "settings.plugins.restarting": "正在重启引擎…",
+        "settings.plugins.restartHint": "插件需引擎重启后才会挂载。DSH GUI 里的 dsh 由本程序托管——请用上面按钮（或重启 DSH GUI）重启，不要用 dsh 页面里的重启（那只对页面自身生效）。",
+        "settings.saved": "已保存",
+      },
+      en: {
+        "settings.title": "Settings",
+        "settings.autoSave": "DSH GUI — changes are saved automatically",
+        "settings.language": "Language",
+        "settings.locale.system": "Follow system (default)",
+        "settings.language.hint": "Also applies to the Harness page (engine and in-page features)",
+        "settings.dataDir": "Data Folder",
+        "settings.home.system": "Follow system ~/.dsh (default)",
+        "settings.home.app": "App folder (settings / sessions / workspace records travel with the app)",
+        "settings.home.moveHint": "If the source folder holds data you will be asked whether to move it",
+        "settings.close": "Close Window",
+        "settings.close.tray": "Hide to tray (default; restore from tray)",
+        "settings.close.quit": "Quit (closing the window quits and removes the tray)",
+        "settings.session": "Session",
+        "settings.autoRestore": "Reopen the last conversation on launch (off = always start blank/new)",
+        "settings.autoRestore.hint": "Remembers the conversation you last opened so it is reopened after restarting DeepSeek Harness",
+        "settings.engineUpdate": "Engine (dsh) Updates",
+        "settings.engineUpdate.sub": "DSH GUI manages automatic engine (dsh) updates: update policy / version channel / auto-check. The check interval is fixed at 30 minutes; on a new version it installs silently, asks, or notifies per the policy.",
+        "settings.update.policy": "Update Policy",
+        "settings.update.policy.auto": "Silently update (always use the latest)",
+        "settings.update.policy.ask": "Ask before updating (default)",
+        "settings.update.policy.notify": "Notify only, do not auto-update",
+        "settings.update.channel": "Version Channel",
+        "settings.update.channel.npm": "Follow the npm latest tag",
+        "settings.update.channel.rc": "Skip alpha (highest rc/stable)",
+        "settings.update.channel.all": "Latest (incl. alpha/beta/rc prereleases)",
+        "settings.update.autoCheck": "Auto-check for engine updates",
+        "settings.update.autoCheck.hint": "Check at launch and every 30 minutes while running; when off, the registry is not queried and the local engine is used",
+        "settings.update.checkNow": "Check Engine Update Now",
+        "settings.plugins": "Third-party plugins (auto-install on launch)",
+        "settings.plugins.sub": "When checked, DSH GUI runs the engine's own `dsh plugin` on every launch to install & mount these community plugins into Harness Web (needs registry access). A running engine must be restarted to load newly installed plugins; uninstall manually via dsh-market or `dsh plugin remove`. Third-party plugins run third-party code with your permissions — off by default; review their source before enabling.",
+        "settings.plugins.sync": "Install checked now",
+        "settings.plugins.syncing": "Installing…",
+        "settings.plugins.installed": "Installed v{0}",
+        "settings.plugins.notInstalled": "Not installed (auto-installs on next launch)",
+        "settings.plugins.done": "Done: {0} installed, {1} failed",
+        "settings.plugins.failed": "Failed: {0}",
+        "settings.plugins.restart": "Restart engine to apply",
+        "settings.plugins.restarting": "Restarting engine…",
+        "settings.plugins.restartHint": "Plugins are mounted when the engine boots. The dsh inside DSH GUI is hosted by this app — restart it with the button above (or restart DSH GUI); the in-page dsh restart only affects the page itself.",
+        "settings.saved": "Saved",
+      },
+    };
+
+    // uiLang 优先来自主进程推送（跟随系统时由主进程解析），查询参数兜底。
+    let uiLang = new URLSearchParams(location.search).get("lang") === "en" ? "en" : "zh";
+
+    function applyTexts() {
+      const table = I18N[uiLang] || I18N.zh;
+      document.querySelectorAll("[data-i18n]").forEach((el) => {
+        const key = el.getAttribute("data-i18n");
+        if (table[key] !== undefined) el.textContent = table[key];
+      });
+      document.documentElement.lang = uiLang === "en" ? "en" : "zh-CN";
+      document.title = uiLang === "en" ? "Settings — DSH GUI" : "设置 — DSH GUI";
+    }
+
+    // ---- 第三方插件列表（数据来自主进程 payload） ----
+    function esc(str) {
+      return String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+    function stateText(id, s) {
+      const st = (s.pluginStatus || {})[id];
+      if (st && st.installed) return (uiLang === "en" ? "Installed v" : "已安装 v") + (st.version || "?");
+      return uiLang === "en" ? "Not installed" : "未安装";
+    }
+    function renderPlugins(s) {
+      const box = document.getElementById("pluginList");
+      if (!box) return;
+      const catalog = Array.isArray(s.pluginCatalog) ? s.pluginCatalog : [];
+      const enabled = Array.isArray(s.autoPlugins) ? new Set(s.autoPlugins) : new Set();
+      box.innerHTML = catalog
+        .map((entry) => {
+          const title = uiLang === "en" ? entry.en : entry.zh;
+          const desc = uiLang === "en" ? entry.enDesc : entry.zhDesc;
+          const blocked = entry.engineOk === false;
+          const engineHint = blocked ? (uiLang === "en" ? entry.enEngine : entry.zhEngine) : "";
+          const state = blocked
+            ? uiLang === "en"
+              ? "Engine-incompatible — not available"
+              : "与当前引擎不兼容，不可用"
+            : stateText(entry.id, s);
+          return (
+            '<label class="plg" style="display:flex;gap:7px;align-items:flex-start;margin:3px 0;cursor:' + (blocked ? "not-allowed" : "pointer") + ';">' +
+            '<input type="checkbox" class="plg-check" data-id="' + esc(entry.id) + '" ' + (enabled.has(entry.id) ? "checked" : "") +
+            (blocked ? " disabled" : "") +
+            ' style="margin-top:3px;accent-color:#4d6bfe;" />' +
+            "<span>" +
+            '<span class="plg-title">' + esc(title) + " — <code style=\"opacity:.7\">" + esc(entry.pkg) + "</code></span><br/>" +
+            '<span class="hint" style="margin:0;display:block;">' + esc(desc) + "</span>" +
+            (blocked && engineHint
+              ? '<span class="hint" style="margin:0;display:block;color:#e8806b;">⚠ ' + esc(engineHint) + "</span>"
+              : "") +
+            '<span class="plg-state hint" style="margin:0;display:block;color:' + (blocked ? "#e8806b" : "#4d9fff") + ';">' + esc(state) + "</span>" +
+            "</span></label>"
+          );
+        })
+        .join("");
+    }
+
     function paint(s) {
-      document.querySelectorAll('input[name="policy"]').forEach((el) => { el.checked = el.value === s.updatePolicy; });
-      document.getElementById("checkEnabled").checked = !!s.updateCheckEnabled;
-      document.getElementById("intervalHours").value = s.updateCheckIntervalHours;
+      if (s.uiLang === "zh" || s.uiLang === "en") uiLang = s.uiLang;
+      applyTexts();
+      document.querySelectorAll('input[name="locale"]').forEach((el) => { el.checked = el.value === s.locale; });
+      document.getElementById("autoRestore").checked = s.autoRestoreLastSession !== false;
       document.querySelectorAll('input[name="homeMode"]').forEach((el) => { el.checked = el.value === s.dshHomeMode; });
       document.querySelectorAll('input[name="closeAction"]').forEach((el) => { el.checked = el.value === s.closeAction; });
+      document.querySelectorAll('input[name="updatePolicy"]').forEach((el) => { el.checked = el.value === s.updatePolicy; });
+      document.querySelectorAll('input[name="updateChannel"]').forEach((el) => { el.checked = el.value === s.updateChannel; });
+      document.getElementById("updateAutoCheck").checked = s.updateCheckEnabled !== false;
+      renderPlugins(s);
+      const cur = document.getElementById("curEngine");
+      const eng = s.installedEngine;
+      const engTxt = eng
+        ? (uiLang === "en" ? "Current engine v" + eng : "当前引擎 v" + eng)
+        : uiLang === "en"
+          ? "(engine not installed)"
+          : "（引擎未安装）";
+      if (cur && cur.textContent !== engTxt) cur.textContent = engTxt;
     }
 
     let flashTimer = null;
     function flashSaved() {
       const el = document.getElementById("saved");
-      el.textContent = "已保存";
+      el.textContent = uiLang === "en" ? "Saved" : "已保存";
       clearTimeout(flashTimer);
       flashTimer = setTimeout(() => { el.textContent = ""; }, 1200);
     }
 
     api.onChanged(paint);
 
+    // 内容高度自适应：语言切换 / 数据到达 / 主题变化时通知主进程重设窗口高度。
+    let rafPending = false;
+    function reportHeight() {
+      if (rafPending) return;
+      rafPending = true;
+      requestAnimationFrame(() => {
+        rafPending = false;
+        const h = Math.ceil(document.body.scrollHeight + 8);
+        try { api.autoSize(h); } catch { /* 主进程未就绪 */ }
+      });
+    }
+    if (typeof ResizeObserver === "function") {
+      const ro = new ResizeObserver(() => reportHeight());
+      ro.observe(document.body);
+    }
+    window.addEventListener("load", reportHeight);
+    // theme 查询参数在脚本末尾设置，DOM 高度可能变化 → 由 ResizeObserver 兜底。
+
     api.get().then((s) => {
       paint(s);
-      document.querySelectorAll('input[name="policy"]').forEach((el) => {
-        el.addEventListener("change", () => el.checked && api.set({ updatePolicy: el.value }).then(() => flashSaved()));
+      document.querySelectorAll('input[name="locale"]').forEach((el) => {
+        el.addEventListener("change", () => el.checked && api.set({ locale: el.value }).then(() => flashSaved()));
       });
-      document.getElementById("checkEnabled").addEventListener("change", (e) => {
-        api.set({ updateCheckEnabled: e.target.checked }).then(() => flashSaved());
-      });
-      document.getElementById("intervalHours").addEventListener("change", (e) => {
-        const v = Number(e.target.value);
-        if (Number.isFinite(v) && v >= 1) api.set({ updateCheckIntervalHours: v }).then(() => flashSaved());
-        else api.get().then(paint);
+      document.getElementById("autoRestore").addEventListener("change", (e) => {
+        api.set({ autoRestoreLastSession: e.target.checked }).then(() => flashSaved());
       });
       document.querySelectorAll('input[name="homeMode"]').forEach((el) => {
         el.addEventListener("change", () => el.checked && api.set({ dshHomeMode: el.value }).then(() => flashSaved()));
       });
       document.querySelectorAll('input[name="closeAction"]').forEach((el) => {
         el.addEventListener("change", () => el.checked && api.set({ closeAction: el.value }).then(() => flashSaved()));
+      });
+      document.querySelectorAll('input[name="updatePolicy"]').forEach((el) => {
+        el.addEventListener("change", () => el.checked && api.set({ updatePolicy: el.value }).then(() => flashSaved()));
+      });
+      document.querySelectorAll('input[name="updateChannel"]').forEach((el) => {
+        el.addEventListener("change", () => el.checked && api.set({ updateChannel: el.value }).then(() => flashSaved()));
+      });
+      document.getElementById("updateAutoCheck").addEventListener("change", (e) => {
+        api.set({ updateCheckEnabled: e.target.checked }).then(() => flashSaved());
+      });
+
+      // 第三方插件：勾选 = 持久化选择（下次启动自动装）；按钮 = 立即同步安装。
+      const pluginList = document.getElementById("pluginList");
+      const pluginMsg = document.getElementById("pluginMsg");
+      const collectChecked = () =>
+        Array.from(pluginList.querySelectorAll(".plg-check:checked")).map((el) => el.getAttribute("data-id"));
+      pluginList.addEventListener("change", (e) => {
+        if (!e.target || !e.target.classList.contains("plg-check")) return;
+        api.set({ autoPlugins: collectChecked() }).then(() => flashSaved());
+      });
+      const btnSyncPlugins = document.getElementById("btnSyncPlugins");
+      const syncLabel = btnSyncPlugins.querySelector("span");
+      const btnRestartEngine = document.getElementById("btnRestartEngine");
+      const restartLabel = btnRestartEngine.querySelector("span");
+      btnRestartEngine.addEventListener("click", async () => {
+        if (btnRestartEngine.disabled) return;
+        btnRestartEngine.disabled = true;
+        const orig = restartLabel.textContent;
+        restartLabel.textContent = uiLang === "en" ? "Restarting engine…" : "正在重启引擎…";
+        pluginMsg.textContent = "";
+        try {
+          const res = await api.restartEngine();
+          if (res && res.ok === false) {
+            pluginMsg.textContent =
+              (uiLang === "en" ? "Restart unavailable: " : "重启不可用：") + String(res.reason || "?");
+            restartLabel.textContent = orig;
+            btnRestartEngine.disabled = false;
+            return;
+          }
+          // 引擎重启中：稍后由 paint(engineRunning=false→true) 反映；按钮短暂保持禁用。
+          setTimeout(() => {
+            restartLabel.textContent = orig;
+            btnRestartEngine.disabled = false;
+          }, 2000);
+        } catch (error) {
+          pluginMsg.textContent = (uiLang === "en" ? "Failed: " : "失败：") + String((error && error.message) || error);
+          restartLabel.textContent = orig;
+          btnRestartEngine.disabled = false;
+        }
+      });
+      btnSyncPlugins.addEventListener("click", async () => {
+        if (btnSyncPlugins.disabled) return;
+        btnSyncPlugins.disabled = true;
+        const orig = syncLabel.textContent;
+        syncLabel.textContent = uiLang === "en" ? "Installing…" : "安装中…";
+        pluginMsg.textContent = "";
+        try {
+          const res = await api.syncPlugins();
+          const fresh = await api.get();
+          paint(fresh);
+          const failN = (res && Array.isArray(res.errors) ? res.errors.length : 0) || 0;
+          const okN = (res && Array.isArray(res.installed) ? res.installed.length : 0) || 0;
+          const remN = (res && Array.isArray(res.removed) ? res.removed.length : 0) || 0;
+          const skipN = (res && Array.isArray(res.skipped) ? res.skipped.length : 0) || 0;
+          if (failN > 0) {
+            const first = Array.isArray(res.errors) ? res.errors[0] : "";
+            pluginMsg.textContent = (uiLang === "en" ? "Failed: " : "失败：") + String(first || "");
+          } else {
+            const parts = [];
+            if (okN > 0) {
+              parts.push(
+                uiLang === "en" ? okN + " installed — restart engine to apply" : "新装 " + okN + "，重启引擎生效",
+              );
+            }
+            if (remN > 0) {
+              parts.push(uiLang === "en" ? remN + " removed (engine-incompatible)" : "移除 " + remN + " 个引擎不兼容插件");
+            }
+            if (skipN > 0) {
+              parts.push(uiLang === "en" ? skipN + " skipped (engine-incompatible)" : "跳过 " + skipN + " 个引擎不兼容插件");
+            }
+            pluginMsg.textContent = parts.length > 0 ? parts.join("；") : uiLang === "en" ? "Up to date" : "已是最新";
+          }
+        } catch (error) {
+          pluginMsg.textContent = (uiLang === "en" ? "Failed: " : "失败：") + String((error && error.message) || error);
+        } finally {
+          syncLabel.textContent = orig;
+          btnSyncPlugins.disabled = false;
+        }
+      });
+      const btnCheck = document.getElementById("btnCheckUpdate");
+      const checkLabel = btnCheck.querySelector("span");
+      btnCheck.addEventListener("click", async () => {
+        if (btnCheck.disabled) return;
+        btnCheck.disabled = true;
+        const orig = checkLabel.textContent;
+        checkLabel.textContent = uiLang === "en" ? "Checking…" : "检查中…";
+        const restore = (text, delay) => {
+          setTimeout(() => {
+            checkLabel.textContent = text;
+            btnCheck.disabled = false;
+          }, delay);
+        };
+        try {
+          const res = await api.checkUpdate();
+          if (res && res.busy) {
+            // 主进程已有检查在进行：提示后恢复按钮。
+            checkLabel.textContent = uiLang === "en" ? "Check already in progress…" : "已有检查正在进行…";
+            restore(orig, 1500);
+            return;
+          }
+          if (res && res.installed) {
+            const s2 = await api.get();
+            paint(s2);
+          }
+          restore(orig, 800);
+        } catch {
+          restore(orig, 800);
+        }
       });
     });
 

@@ -1,4 +1,4 @@
-﻿# smoke-modal.ps1 — E2E test for the modal settings window.
+# smoke-modal.ps1 — E2E test for the modal settings window.
 #
 # While the settings window is open, the main window must be non-operable
 # (Win32-enabled = false) and must NOT close. After closing settings, the main
@@ -50,7 +50,7 @@ New-Item -ItemType Directory -Path $homeDir | Out-Null
 $log = Join-Path $env:TEMP ("dsh-modal-" + [guid]::NewGuid().ToString("N") + ".log")
 $errLog = $log + ".err"
 
-$json = @{ updatePolicy = "ask"; dshHomeMode = "system"; updateCheckEnabled = $true; updateCheckIntervalHours = 1; closeAction = "tray" } | ConvertTo-Json
+$json = @{ updatePolicy = "ask"; dshHomeMode = "system"; updateCheckEnabled = $true; closeAction = "tray" } | ConvertTo-Json
 [System.IO.File]::WriteAllText((Join-Path $ud "settings.json"), $json, [System.Text.UTF8Encoding]::new($false))
 
 $env:DSH_SHELL_USERDATA = $ud

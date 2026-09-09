@@ -43,13 +43,41 @@
 <body>
   <div class="icon">✓</div>
   <div class="text">
-    <div id="t">已更新</div>
+    <div id="t"></div>
     <div id="s"></div>
   </div>
   <button onclick="window.close()" title="关闭">✕</button>
   <script>
-    const theme = new URLSearchParams(location.search).get("theme");
+    const params = new URLSearchParams(location.search);
+    const theme = params.get("theme");
     if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+    document.documentElement.lang = params.get("lang") === "en" ? "en" : "zh-CN";
+    document.querySelector("button").title = params.get("lang") === "en" ? "Close" : "关闭";
+    document.getElementById("t").textContent = params.get("lang") === "en" ? "Updated" : "已更新";
+
+    // 右下角提示：默认 5 秒后自动关闭；鼠标悬停暂停计时，移开再计。
+    const AUTO_CLOSE_MS = 5000;
+    let closeTimer = null;
+    function arm() {
+      clearTimeout(closeTimer);
+      closeTimer = setTimeout(() => window.close(), AUTO_CLOSE_MS);
+    }
+    function disarm() {
+      clearTimeout(closeTimer);
+      closeTimer = null;
+    }
+    document.body.addEventListener("mouseenter", disarm);
+    document.body.addEventListener("mouseleave", arm);
+    // 主进程会随后写入标题/副标题；标题一旦非空即开始 5 秒计时。
+    const titleEl = document.getElementById("t");
+    const observer = new MutationObserver(() => {
+      if (titleEl.textContent && titleEl.textContent.trim() !== "") arm();
+    });
+    observer.observe(titleEl, { childList: true, subtree: true, characterData: true });
+    // 若 2 秒内主进程仍未写入（加载异常），同样计时关闭。
+    setTimeout(() => {
+      if (titleEl.textContent && titleEl.textContent.trim() !== "") arm();
+    }, 2000);
   </script>
 </body>
 </html>

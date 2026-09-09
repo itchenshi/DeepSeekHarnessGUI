@@ -1,7 +1,7 @@
 {
   "name": "dsh-gui-shell",
   "productName": "DSH GUI",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "App shell for DeepSeek Harness: embedded Web UI, always-latest engine, fresh session per launch",
   "author": "dsh-gui-shell contributors",
   "main": "src/main.js",
@@ -11,7 +11,6 @@
     "make-icons": "node scripts/make-icons.mjs",
     "bundle:node": "node scripts/bundle-node.mjs",
     "fix:unpacked": "node scripts/fix-unpacked.mjs --force",
-    "push:all": "powershell -File scripts/push-all.ps1",
     "dist:win": "node scripts/make-icons.mjs && node scripts/bundle-node.mjs && electron-builder --win --publish never && node scripts/fix-unpacked.mjs --force",
     "dist:mac": "node scripts/make-icons.mjs && node scripts/bundle-node.mjs && electron-builder --mac --publish never && node scripts/fix-unpacked.mjs --force",
     "dist:mac:x64": "node scripts/make-icons.mjs && node scripts/bundle-node.mjs && electron-builder --mac --x64 --publish never && node scripts/fix-unpacked.mjs --force",

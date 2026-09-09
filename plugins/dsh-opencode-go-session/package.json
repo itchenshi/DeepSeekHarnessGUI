@@ -1,0 +1,45 @@
+{
+  "name": "dsh-opencode-go-session",
+  "version": "0.1.0",
+  "description": "Hardened DeepSeek Harness plugin: attaches a stable per-conversation x-opencode-session header to OpenCode / OpenCode Go provider requests (fixes 400 MissingSessionID, keeps session affinity / prompt-cache routing) WITHOUT leaking the internal DSH session id to third parties.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node tests/test.mjs",
+    "prepublishOnly": "npm test"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "dsh-plugin",
+    "cordis",
+    "opencode",
+    "opencode-go",
+    "opencode-zen",
+    "x-opencode-session",
+    "missing-session-id",
+    "session-affinity",
+    "prompt-cache",
+    "llm"
+  ],
+  "license": "MIT",
+  "author": {
+    "name": "dsh-opencode-go-session contributors"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}
