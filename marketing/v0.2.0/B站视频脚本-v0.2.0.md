@@ -41,4 +41,4 @@
 - [ ] 全程无手柄/硬广感，安装包链接只出现在简介和置顶评论
 - [ ] 字幕完整（B 站观众大量静音刷）
 - [ ] 结尾有明确的下一动作（三连 / Star / 插件提名 / issue）
-- [ ] 发布后置顶评论放：仓库地址 + Gitee/GitCode 镜像 + 一句「插件提名请留言」
+- [ ] 发布后置顶评论放：GitHub 主仓库链接（https://github.com/itchenshi/DeepSeekHarnessGUI）+ Gitee/GitCode 镜像 + 一句「插件提名请留言」

@@ -7,7 +7,7 @@
 ## 目录
 
 - [一、v0.2.0 更新速览](#一v020-更新速览)
-- [二、项目简介](#二项目简介)
+- [二、项目简介与开源平台](#二项目简介与开源平台)
 - [三、核心特性（v0.2.0）](#三核心特性v020)
 - [四、快速开始](#四快速开始)
 - [五、设置项说明](#五设置项说明)
@@ -27,11 +27,19 @@
 | **启动失败自愈** | 插件导致引擎起不来时自动剔除 + 一键禁用重启 |
 | **win 便携包** | NSIS 安装包之外新增便携 zip，解压即用 |
 
-## 二、项目简介
+## 二、项目简介与开源平台
 
 **DSH GUI** 是 [DeepSeek Harness](https://www.deepseek.com/harness/)（DeepSeek 开源 Agent 框架，npm 包 `@deepseek-ai/dsh`）的非官方桌面外壳。它把 Harness 的 Web UI 装进原生桌面窗口：开箱即用、常驻系统托盘、自动保持引擎最新——同时因内核仍是官方 `dsh`，**保留了 100% 的 Harness 能力**。
 
 一句话概括：**内核 100% 官方，外壳负责「运行体验」。**
+
+开源平台一览（三平台仓库互为镜像；安装包以 **GitHub Releases** 为准）：
+
+| 平台 | 角色 | 地址 |
+|---|---|---|
+| **GitHub** | 主仓库（安装包为准） | https://github.com/itchenshi/DeepSeekHarnessGUI |
+| **Gitee** | 镜像 | https://gitee.com/itchenshi/DeepSeekHarnessGUI |
+| **GitCode** | 镜像 | https://gitcode.com/itchenshi/DeepSeekHarnessGUI |
 
 ## 三、核心特性（v0.2.0）
 
@@ -48,7 +56,7 @@
 - 智能体团队（dsh-agent-teams）
 - **OpenCode 会话头（dsh-opencode-go-session，加固版）**
 
-勾选后，每次启动自动用引擎 `dsh plugin` 安装并挂载到 Harness Web。其中内置的 OpenCode 会话头插件为发往 OpenCode / OpenCode Go 的请求注入稳定 `x-opencode-session` 头（修复 400 MissingSessionID），并做了安全加固：默认不透明 UUID、头值校验、debugFile 限位脱敏——不把内部会话 ID 外发给第三方。
+勾选后，每次启动自动用引擎 `dsh plugin` 安装并挂载到 Harness Web（npm 包需可访问网络；GUI 启动对账幂等，不覆盖用户手动装的同名插件）。其中内置的 OpenCode 会话头插件为发往 OpenCode / OpenCode Go 的请求注入稳定 `x-opencode-session` 头（修复 400 MissingSessionID），并做了安全加固：默认不透明 UUID、头值校验、debugFile 限位脱敏——不把内部会话 ID 外发给第三方。
 
 **启动失败自愈**：若刚自动安装的插件导致 dsh 无法启动，GUI 会自动剔除该插件并取消勾选；疑似插件导致的启动失败会弹出诊断框，一键禁用并重启，不用手动翻日志。
 
@@ -62,7 +70,7 @@
 | 静默更新 | 自动安装，不打扰 |
 | 仅提示 | 只提示有新版本，不自动更新 |
 
-更新安装到应用私有目录，完成后右下角弹出**持久角标**提醒。
+更新安装到应用私有目录，完成后右下角弹出**持久角标**提醒。GUI 更新与引擎更新分家：托盘「检查 DSH GUI 更新…」查 GitHub Releases，引擎更新由 GUI 后台按策略自动处理。
 
 ### 4. 多语言（v0.2.0 新增）
 
@@ -83,7 +91,7 @@
 ### 8. 系统托盘与窗口行为
 
 - 主窗口启动即最大化，隐藏时无尺寸闪烁；
-- 托盘右键菜单：「打开窗口 / 检查更新… / 设置 / 退出」；
+- 托盘右键菜单：「打开窗口 / 检查 DSH GUI 更新… / 设置 / 退出」；
 - 关闭窗口默认**隐藏到托盘**，可设置「直接退出」；
 - 设置窗口为**模态**：打开期间主窗口不可操作、不可关闭。
 
@@ -110,7 +118,7 @@ npm start          # 启动 DSH GUI
 
 | 平台 | 产物 |
 |---|---|
-| Windows | `DSH GUI Setup 0.2.0.exe`（NSIS 安装包）/ `DSH-GUI-WIN.zip`（解压即用） |
+| Windows | `DSH GUI Setup 0.2.0.exe`（NSIS 安装包）/ `DSH GUI 0.2.0-win.zip`（便携压解即用）|
 | macOS | `DSH GUI 0.2.0.dmg`（Intel）/ `DSH GUI 0.2.0-arm64.dmg`（Apple Silicon） |
 | Linux | `DSH GUI 0.2.0.AppImage` / `DSH-GUI-LINUX.zip` |
 
@@ -137,7 +145,7 @@ npm start          # 启动 DSH GUI
 - **入口**：设置窗口 → 第三方插件，勾选后每次启动自动安装。
 - **安全说明**：第三方插件等于以你的权限运行第三方代码——默认全部关闭，勾选前请自行审阅源码。
 - **卸载**：dsh-market 或 `dsh plugin remove` 手动处理，GUI 不做自动卸载。
-- **内置加固插件**：`dsh-opencode-go-session` 随仓库分发（不依赖 npm 注册表），为 OpenCode/OpenCode Go 请求加稳定的会话头，修复 400 MissingSessionID 并保持提示缓存亲和；默认用不透明 UUID，杜绝内部会话 ID 泄露。
+- **内置加固插件**：`dsh-opencode-go-session` 随仓库分发（`plugins/` 目录，本地安装不依赖 npm 注册表），为 OpenCode/OpenCode Go 请求加稳定的会话头，修复 400 MissingSessionID 并保持提示缓存亲和；默认用不透明 UUID，杜绝内部会话 ID 泄露。
 
 ## 七、数据目录与隐私
 
@@ -161,7 +169,7 @@ npm run dist:mac      # macOS   → .dmg（需 macOS，含 x64/arm64 变体）
 npm run dist:linux    # Linux   → .AppImage + 目录 zip
 ```
 
-- 三平台产物由 GitHub Actions（`.github/workflows/build-all.yml`）在 tag 构建时自动生成并挂到 Release，构建前自动清理旧 dist，避免混入旧版本安装包；
+- 三平台产物由 GitHub Actions（`.github/workflows/build-all.yml`）在 tag 构建时自动生成并挂到 GitHub Release，构建前自动清理旧 dist，避免混入旧版本安装包；
 - 捆绑便携 Node（默认 v26），`scripts/after-pack.js` 完整拷入（不能用 extraResources，会丢 node_modules）；
 - Intel macOS 的 Node 通过 `DSH_NODE_ARCH=x64` 在 Apple Silicon runner 上交叉打包；
 - AppImage 的 `mksquashfs` 仅 Linux/macOS 可执行，Windows 请用 CI 构建 Linux 包。
@@ -192,4 +200,4 @@ A：本壳只是启动器/外壳，运行的仍是官方 `@deepseek-ai/dsh`；�
 
 v0.2.0 让 DSH GUI 从「一个能用的壳」走向「一套完整的桌面体验」：插件管理补齐了 Harness 的扩展能力入口，多语言与主题跟随让窗口真正「属于」你的 Harness，启动失败自愈则把运维负担降到接近零。无论你是想在 Windows / macOS / Linux 上无痛使用 Harness 的终端用户，还是对 Electron 外壳 + 子进程托管 + 插件对账感兴趣的开发者，都值得 clone 下来看一看。
 
-如果本文对你有帮助，欢迎 **点赞 / 收藏 / 关注**，也欢迎去 [GitHub](https://github.com/itchenshi/DeepSeekHarnessGUI) / [Gitee 镜像](https://gitee.com/itchenshi/DeepSeekHarnessGUI) 点个 Star 支持开源，有使用问题直接在 Issues 区反馈。
+如果本文对你有帮助，欢迎 **点赞 / 收藏 / 关注**，也欢迎去 [GitHub 主仓库](https://github.com/itchenshi/DeepSeekHarnessGUI) 点个 Star（Gitee / GitCode 镜像同步），有使用问题直接在 Issues 区反馈。

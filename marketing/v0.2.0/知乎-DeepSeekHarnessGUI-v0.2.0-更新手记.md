@@ -2,6 +2,7 @@
 
 > 项目地址：https://github.com/itchenshi/DeepSeekHarnessGUI（GitHub 主仓库，MIT License，非官方项目）
 > 国内镜像：https://gitee.com/itchenshi/DeepSeekHarnessGUI / https://gitcode.com/itchenshi/DeepSeekHarnessGUI
+> 开源平台：三平台互为镜像，安装包以 GitHub Releases 为准（https://github.com/itchenshi/DeepSeekHarnessGUI/releases）
 
 上篇《给 DeepSeek Harness 套了个壳》写的是「为什么做这个壳」。这篇聊聊 **v0.2.0**：距离 0.1.0 之后，我给这个壳补齐了哪三块拼图，以及每一块背后我在想什么。
 
@@ -74,6 +75,6 @@ v0.2.0 就是冲着这三个问题去的。
 
 这个项目从 0.1.0 走到 0.2.0，我的取舍始终是一条：**壳只做官方引擎没空做的「体验活」，内核永远 100% 官方**。这样官方每次更新我都跟着躺赢，不用维护 fork 依赖。
 
-如果你在桌面端折腾 Harness，欢迎去 [GitHub](https://github.com/itchenshi/DeepSeekHarnessGUI) 看看；用出问题，直接开 issue——开源项目最怕的不是批评，是沉默。
+如果你在桌面端折腾 Harness，欢迎去 [GitHub 主仓库](https://github.com/itchenshi/DeepSeekHarnessGUI) 看看（[Gitee](https://gitee.com/itchenshi/DeepSeekHarnessGUI) / [GitCode](https://gitcode.com/itchenshi/DeepSeekHarnessGUI) 镜像同步）；用出问题，直接开 issue——开源项目最怕的不是批评，是沉默。
 
 > 补充一句：DSH GUI 是独立开源项目（MIT），与 DeepSeek Harness 官方无隶属关系；任何 Harness 本体的能力问题请查阅官方文档。
