@@ -34,6 +34,16 @@ The three repositories are mirrors of each other; installers are published on [G
 | Gitee (mirror) | https://gitee.com/itchenshi/DeepSeekHarnessGUI | `git clone https://gitee.com/itchenshi/DeepSeekHarnessGUI.git` |
 | GitCode (mirror) | https://gitcode.com/itchenshi/DeepSeekHarnessGUI | `git clone https://gitcode.com/itchenshi/DeepSeekHarnessGUI.git` |
 
+## 📸 Screenshots
+
+| Main window | Settings window |
+|---|---|
+| ![Main window](marketing/v0.2.0/主窗口.png) | ![Settings window](marketing/v0.2.0/设置.png) |
+
+| Settings (third-party plugins) | Sidebar |
+|---|---|
+| ![DSH Settings](marketing/v0.2.0/DSH设置.png) | ![DSH Sidebar](marketing/v0.2.0/DSH侧边栏.png) |
+
 ---
 
 ## ✨ Feature overview (by category)

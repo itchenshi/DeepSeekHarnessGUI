@@ -36,6 +36,16 @@ DSH GUI 是 [DeepSeek Harness](https://www.deepseek.com/harness/)（开源 Agent
 
 三平台仓库互为镜像；安装包以 [GitHub Releases](https://github.com/itchenshi/DeepSeekHarnessGUI/releases) 为准。
 
+## 📸 界面预览
+
+| 主窗口 | 设置窗口 |
+|---|---|
+| ![主窗口](marketing/v0.2.0/主窗口.png) | ![设置窗口](marketing/v0.2.0/设置.png) |
+
+| 设置窗口（第三方插件） | 侧边栏 |
+|---|---|
+| ![DSH设置](marketing/v0.2.0/DSH设置.png) | ![DSH侧边栏](marketing/v0.2.0/DSH侧边栏.png) |
+
 ---
 
 ## ✨ 功能总览（按分类）
