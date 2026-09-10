@@ -41,6 +41,8 @@
 | **Gitee** | 镜像 | https://gitee.com/itchenshi/DeepSeekHarnessGUI |
 | **GitCode** | 镜像 | https://gitcode.com/itchenshi/DeepSeekHarnessGUI |
 
+![DSH GUI 主窗口](主窗口.png)
+
 ## 三、核心特性（v0.2.0）
 
 ### 1. 不依赖外部浏览器
@@ -57,6 +59,8 @@
 - **OpenCode 会话头（dsh-opencode-go-session，加固版）**
 
 勾选后，每次启动自动用引擎 `dsh plugin` 安装并挂载到 Harness Web（npm 包需可访问网络；GUI 启动对账幂等，不覆盖用户手动装的同名插件）。其中内置的 OpenCode 会话头插件为发往 OpenCode / OpenCode Go 的请求注入稳定 `x-opencode-session` 头（修复 400 MissingSessionID），并做了安全加固：默认不透明 UUID、头值校验、debugFile 限位脱敏——不把内部会话 ID 外发给第三方。
+
+![设置窗口：第三方插件](DSH设置.png)
 
 **启动失败自愈**：若刚自动安装的插件导致 dsh 无法启动，GUI 会自动剔除该插件并取消勾选；疑似插件导致的启动失败会弹出诊断框，一键禁用并重启，不用手动翻日志。
 
@@ -75,6 +79,12 @@
 ### 4. 多语言（v0.2.0 新增）
 
 设置窗口「语言」支持 **跟随系统（默认）/ 中文 / English**。选择会同时应用到 GUI（设置窗口/托盘菜单/对话框）与 Harness 页面，引擎侧经由 `settings.yaml` 的 `locale.preference` 热发布——**无需重启**。
+
+中文界面 / English 界面对照：
+
+| 中文界面 | English UI |
+|---|---|
+| ![设置窗口（中文）](设置.png) | ![Settings (English)](设置-english.png) |
 
 ### 5. 外观跟随 Harness（v0.2.0 增强）
 
