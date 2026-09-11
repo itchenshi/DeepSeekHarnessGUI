@@ -32,12 +32,20 @@
 
 const { app, BrowserWindow, Menu, Tray, nativeImage, nativeTheme, dialog, screen, ipcMain, shell } = require("electron");
 const { spawn, spawnSync } = require("node:child_process");
+const http = require("node:http");
 const fs = require("node:fs");
 const fsp = require("node:fs/promises");
 const path = require("node:path");
 const os = require("node:os");
 const semver = require("semver");
 const YAML = require("yaml");
+const {
+  APPEARANCE_MODES,
+  parseEngineSettings,
+  applyEngineSettings,
+  engineThemeForAppearance,
+} = require("./settings-ui");
+const { statusFingerprint } = require("./plugin-state");
 const { defaultDshHome, hasHomeData, moveHomeData } = require("./home-migrate");
 const { ensureEnginePatches } = require("./engine-patch");
 const {
@@ -48,8 +56,14 @@ const {
   installedBundles: readInstalledProfileBundles,
   readProfilePnpmManager: readProfilePnpmManagerFn,
   syncEnabledPlugins,
+  setPluginEnabled,
+  reconcilePluginEnabled,
+  removeLegacyPlugins,
+  packageRowIds,
   ensurePnpm: ensurePluginPnpm,
   removePlugin: removeEnginePlugin,
+  healProfileBundles: healProfileBundlesFn,
+  pruneProfileBundles: pruneProfileBundlesFn,
 } = require("./plugin-manager");
 
 const DSH_PACKAGE = "@deepseek-ai/dsh";
@@ -91,8 +105,11 @@ const CLOSE_ACTIONS = {
 
 /**
  * UI 语言设置：跟随系统 / 中文 / English。
- * 缺省 "system"：以 Electron 的系统语言解析为 zh|en；同时把结果同步到引擎的
+ * 缺省 "system"：优先跟随引擎设置文件里的语言（引擎页面即用它），否则按
+ * Electron 的系统语言解析为 zh|en；同时把结果同步到引擎的
  * <DSH_HOME>/settings.yaml 的 locale.preference（引擎热发布该文件，内置页面跟随）。
+ * 外观（appearance）同理：engine=跟随引擎主题（默认），system/light/dark 显式
+ * 选择并写回 ui-theme.preference；主进程 watch settings.yaml 热跟随两侧改动。
  */
 const UI_LOCALES = { system: "跟随系统", zh: "中文", en: "English" };
 
@@ -393,9 +410,10 @@ const DEFAULT_SETTINGS = {
   updateCheckEnabled: true, // 引擎更新检查开关
   closeAction: "tray", // 关闭窗口默认隐藏到托盘
   autoRestoreLastSession: true, // 启动后自动回到最近一次对话
-  // 启动时自动安装/挂载的第三方插件（CATALOG id 列表；默认关闭=不自动装任何插件）。
-  autoPlugins: [],
   locale: "system", // UI 语言：system=跟随系统 / zh=中文 / en=English
+  // UI 外观：engine=跟随引擎（Harness 页面主题，默认）/ system=跟随系统 / light / dark。
+  // 选 system/light/dark 会同时写回引擎设置文件，两侧一起切换。
+  appearance: "engine",
 };
 
 let ENGINE_DIR = null;
@@ -516,10 +534,10 @@ async function loadSettings() {
     if (typeof parsed.updateCheckEnabled === "boolean") settings.updateCheckEnabled = parsed.updateCheckEnabled;
     if (parsed.closeAction === "tray" || parsed.closeAction === "quit") settings.closeAction = parsed.closeAction;
     if (typeof parsed.autoRestoreLastSession === "boolean") settings.autoRestoreLastSession = parsed.autoRestoreLastSession;
-    if (Array.isArray(parsed.autoPlugins)) {
-      settings.autoPlugins = parsed.autoPlugins.filter((id) => typeof id === "string" && pluginCatalogIds.has(id));
-    }
+    // 旧版本持久化的 autoPlugins（勾选意图）已废弃：勾选框=安装状态实时镜像，
+    // 不再保存期望集合。旧字段保留在 settings.json 里但不再参与任何逻辑。
     if (UI_LOCALES[parsed.locale]) settings.locale = parsed.locale;
+    if (APPEARANCE_MODES[parsed.appearance]) settings.appearance = parsed.appearance;
     if (typeof parsed.engineNode === "string") settings.engineNode = parsed.engineNode;
     if (typeof parsed.lastNotifiedVersion === "string") settings.lastNotifiedVersion = parsed.lastNotifiedVersion;
     if (typeof parsed.lastCheckedAt === "number") settings.lastCheckedAt = parsed.lastCheckedAt;
@@ -551,10 +569,9 @@ async function applySettingsPatch(patch) {
   if (typeof patch.updateCheckEnabled === "boolean") next.updateCheckEnabled = patch.updateCheckEnabled;
   if (patch.closeAction === "tray" || patch.closeAction === "quit") next.closeAction = patch.closeAction;
   if (typeof patch.autoRestoreLastSession === "boolean") next.autoRestoreLastSession = patch.autoRestoreLastSession;
-  if (Array.isArray(patch.autoPlugins)) {
-    next.autoPlugins = patch.autoPlugins.filter((id) => typeof id === "string" && pluginCatalogIds.has(id));
-  }
+  // autoPlugins 已废弃（不再持久化勾选意图）。
   if (UI_LOCALES[patch.locale]) next.locale = patch.locale;
+  if (APPEARANCE_MODES[patch.appearance]) next.appearance = patch.appearance;
   if (Object.keys(next).length > 0) {
     await saveSettings(next);
     buildMenu();
@@ -565,10 +582,18 @@ async function applySettingsPatch(patch) {
       if (settingsWin && !settingsWin.isDestroyed()) {
         settingsWin.setTitle(L("settings.titleBar"));
       }
-      await syncEngineUILocale().catch((error) => err("syncEngineUILocale failed:", error.message));
+      await syncEngineUI({ locale: resolveUiLang() }).catch((error) => err("syncEngineUI locale failed:", error.message));
       if (win && !win.isDestroyed() && !win.webContents.isLoading()) {
         // 页面内文案跟随引擎 locale 服务；引擎设置文件热发布后由引擎自行切换。
         log("ui locale ->", resolveUiLang());
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(next, "appearance")) {
+      // 立即按新外观模式应用；显式选择（非“跟随引擎”）同时写回引擎设置文件。
+      await refreshAppearance();
+      const pushTheme = engineThemeForAppearance(next.appearance);
+      if (pushTheme) {
+        await syncEngineUI({ theme: pushTheme }).catch((error) => err("syncEngineUI theme failed:", error.message));
       }
     }
   }
@@ -680,6 +705,14 @@ async function switchHomeMode(mode) {
         : path.join(userDataDir(), "dsh-home");
   log("dshHome now:", dshHome ?? "~/.dsh");
   buildMenu();
+  // 新数据目录的引擎外观/语言设置重新读入，并让热跟随 watch 指向新目录。
+  await readEngineUiPrefs().catch(() => {});
+  await refreshAppearance().catch((error) => err("refreshAppearance failed:", error.message));
+  startEngineSettingsWatcher();
+  // 热跟随 <DSH_HOME>/profiles/web/package.json：插件市场那边禁用/卸载插件后，
+  // 设置窗口的第三方插件勾选状态要跟着刷新。
+  stopProfileWatcher();
+  startProfileWatcher();
 
   // If the engine was running against the old home (moved or not), restart it
   // so this session keeps working on the new home.
@@ -720,6 +753,7 @@ function settingsPayload() {
       engineRange: entry.engineRange ?? null,
       engineOk: (compat[entry.id] && compat[entry.id].ok) ?? true,
     })),
+    // 勾选框 = 安装状态实时镜像：插件状态在这里，设置窗口据此勾/不勾。
     pluginStatus: pluginCatalogStatus(effectiveHomePath()),
   };
 }
@@ -916,11 +950,23 @@ function npmInstall(version, onProgress) {
     }
     const { node: nodeExec, cli: npmCli } = npm;
     const spec = version ? `${DSH_PACKAGE}@${version}` : DSH_PACKAGE;
+    // 装进同卷的临时前缀（<ENGINE_DIR>.stage），成功后原子替换 ENGINE_DIR。
+    // 老实现直接 `--prefix ENGINE_DIR` 增量装：更新时 npm 的新依赖会沉进
+    // @deepseek-ai/dsh 的 nested node_modules，旧树根部残留的 hoist
+    // （cordis-plugin-loader 等）原样留下 → 引擎在根 import 不到 nested 的
+    // client-ui 包，ERR_MODULE_NOT_FOUND 挡死整个启动。级联安装必须从空目录
+    // 开始（产物全部 hoist 到根），再整体换入；失败时旧引擎原样保留可回滚。
+    const stage = `${ENGINE_DIR}.stage`;
+    try {
+      fs.rmSync(stage, { recursive: true, force: true });
+    } catch {
+      /* stale stage dir unwritable -> npm fails loudly below */
+    }
     const args = [
       npmCli,
       "install",
       spec,
-      "--prefix", ENGINE_DIR,
+      "--prefix", stage,
       "--no-audit", "--no-fund", "--no-save",
       "--loglevel", "error",
     ];
@@ -946,12 +992,55 @@ function npmInstall(version, onProgress) {
         .pop();
       if (line) onProgress?.(line.trim());
     });
-    child.on("error", (error) => reject(error));
+    const cleanupStage = () => {
+      try {
+        fs.rmSync(stage, { recursive: true, force: true });
+      } catch {
+        /* best effort */
+      }
+    };
+    child.on("error", (error) => {
+      cleanupStage();
+      reject(error);
+    });
     child.on("close", (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
+      if (code !== 0) {
+        cleanupStage();
         reject(new Error(`npm install exited with ${code}\n${tail}`));
+        return;
+      }
+      try {
+        // 原子换入：旧树挪走 -> stage 换入 -> 删旧树。任一步失败都尽量还原。
+        const old = `${ENGINE_DIR}.old`;
+        try {
+          fs.rmSync(old, { recursive: true, force: true });
+        } catch {
+          /* best effort */
+        }
+        if (fs.existsSync(ENGINE_DIR)) fs.renameSync(ENGINE_DIR, old);
+        try {
+          fs.renameSync(stage, ENGINE_DIR);
+        } catch (error) {
+          if (fs.existsSync(old) && !fs.existsSync(ENGINE_DIR)) {
+            try {
+              fs.renameSync(old, ENGINE_DIR);
+            } catch {
+              /* keep old; install reported as failed below */
+            }
+          }
+          cleanupStage();
+          reject(error);
+          return;
+        }
+        try {
+          fs.rmSync(old, { recursive: true, force: true });
+        } catch {
+          /* stale .old dir is harmless */
+        }
+        resolve();
+      } catch (error) {
+        cleanupStage();
+        reject(error);
       }
     });
   });
@@ -1213,7 +1302,7 @@ async function diagnoseStartFailure({ code, signal, error, tail }) {
           })
           .catch(() => ({ response: 1 }));
     if (response === 0) {
-      // 禁用并重启：移除可疑插件（profiles bundle + autoPlugins 勾选）后重拉引擎。
+      // 禁用并重启：移除可疑插件（profiles bundle；勾选框随之经 watch 取消）后重拉引擎。
       try {
         const pnpmBinDir = await ensurePluginPnpm({
           installDir: path.join(userDataDir(), "pnpm-tools"),
@@ -1230,14 +1319,24 @@ async function diagnoseStartFailure({ code, signal, error, tail }) {
             nodeExec: resolveNodeExecutable(),
             log,
           });
-          if (!res.ok) err("disable plugin failed:", suspect.pkg, res.output.slice(-200));
+          if (res.ok) continue;
+          // 引擎 remove 失败（常见于依赖已不在 package.json：pnpm 报
+          // ERR_PNPM_CANNOT_REMOVE_MISSING_DEPS，正是会挡启动的 stale 登记）时
+          // 兜底直接摘掉 bundle 登记——禁用语义等价，且不碰用户其余状态。
+          try {
+            const pruned = pruneProfileBundlesFn(effectiveHomePath(), [suspect.pkg]);
+            if (pruned.includes(suspect.pkg)) {
+              log("disable fallback: pruned stale bundle registration:", suspect.pkg);
+              continue;
+            }
+          } catch (error) {
+            err("disable fallback prune failed:", suspect.pkg, error.message);
+          }
+          err("disable plugin failed:", suspect.pkg, res.output.slice(-200));
         }
       } catch (error) {
         err("disable plugin failed:", error);
       }
-      await saveSettings({
-        autoPlugins: (settings.autoPlugins ?? []).filter((id) => !suspects.some((s) => s.id === id)),
-      }).catch((error) => err("persist plugin disable failed:", error.message));
       setStatus(L("diag.title"), L("diag.plugin.disable"));
       await startEngine(resolveNodeExecutable()).catch((error) => fatalUi(error, L("engine.startFailed")));
       return;
@@ -1306,19 +1405,25 @@ function themeQuery() {
   return windowThemeDark ? "dark" : "light";
 }
 
-/** Read the harness appearance preference from <DSH_HOME>/settings.yaml. */
-async function readHarnessTheme() {
-  const home = dshHome ?? defaultDshHome();
-  const file = path.join(home, "settings.yaml");
+// 最近一次从 <DSH_HOME>/settings.yaml 读到的引擎 UI 配置（主题/语言），供
+// “跟随引擎”模式与设置文件变更时热跟随。
+let engineThemePref = "system";
+let engineLocalePref = null;
+
+/**
+ * 启动/切目录时读取引擎设置文件里的主题与语言，作为“跟随引擎”的初始值。
+ * 文件不存在或不可读时保留默认值（主题 system、语言跟随系统/引擎）。
+ */
+async function readEngineUiPrefs() {
+  const file = path.join(effectiveHomePath(), "settings.yaml");
   try {
-    const text = await fsp.readFile(file, "utf8");
-    const doc = YAML.parse(text);
-    const pref = doc && doc["ui-theme"] && doc["ui-theme"].preference;
-    if (pref === "light" || pref === "dark" || pref === "system") return pref;
+    const { theme, locale } = parseEngineSettings(await fsp.readFile(file, "utf8"));
+    engineThemePref = theme ?? "system";
+    engineLocalePref = locale ?? null;
+    log("engine UI prefs:", { theme: engineThemePref, locale: engineLocalePref });
   } catch (error) {
-    log("harness settings.yaml unreadable, using system theme:", error.message);
+    log("harness settings.yaml unreadable, keeping defaults:", error.message);
   }
-  return "system";
 }
 
 function applyHarnessTheme(preference) {
@@ -1329,13 +1434,294 @@ function applyHarnessTheme(preference) {
   log("harness theme:", preference, "| window dark:", windowThemeDark);
 }
 
+/**
+ * 按当前 GUI 外观模式算出生效主题并应用（原生窗口 + 已打开的子窗口）。
+ * engine 模式先取一次最新引擎值；显式模式直接用所选值。
+ */
+async function refreshAppearance() {
+  if ((settings.appearance ?? "engine") === "engine") {
+    await readEngineUiPrefs().catch(() => {});
+  }
+  const mode = settings.appearance ?? "engine";
+  applyHarnessTheme(mode === "engine" ? engineThemePref : mode);
+  notifyChildWindowsTheme();
+}
+
+/** 把主题消息投递给一个子窗口：设置窗走 preload IPC，其余本地窗口用 executeJavaScript。 */
+function sendThemeToWindow(target, theme) {
+  if (!target || target.isDestroyed()) return;
+  const apply = () => {
+    if (target.isDestroyed()) return;
+    try {
+      target.setBackgroundColor(theme === "dark" ? "#0f151d" : "#ffffff");
+    } catch {
+      /* ignore */
+    }
+    if (target === settingsWin) {
+      try {
+        target.webContents.send("app:theme", theme);
+      } catch {
+        /* ignore */
+      }
+    } else {
+      target.webContents
+        .executeJavaScript(
+          `document.documentElement.dataset.theme=${JSON.stringify(theme)};` +
+            `document.documentElement.style.colorScheme=${JSON.stringify(theme)};`,
+        )
+        .catch(() => {});
+    }
+  };
+  if (target.webContents.isLoading()) target.webContents.once("did-finish-load", apply);
+  else apply();
+}
+
+/**
+ * 把新主题同步给已打开的本机子窗口（设置窗 / 更新角标）。主窗口内嵌的是引擎
+ * 页面，主题由引擎自己热发布管理，这里不碰它。
+ */
+function notifyChildWindowsTheme() {
+  const theme = themeQuery(); // "light" | "dark"
+  sendThemeToWindow(settingsWin, theme);
+  sendThemeToWindow(noticeWin, theme);
+}
+
+// ---------------------------------------------------------------------------
+// 引擎 UI 设置热跟随（watch <DSH_HOME>/settings.yaml）
+// ---------------------------------------------------------------------------
+
+let engineSettingsWatcher = null;
+let engineSettingsWatchTimer = null;
+let engineSettingsWatchRetries = 0;
+
+function startEngineSettingsWatcher() {
+  stopEngineSettingsWatcher();
+  const home = effectiveHomePath();
+  const file = path.join(home, "settings.yaml");
+  try {
+    engineSettingsWatcher = fs.watch(home, { persistent: false }, (eventType, filename) => {
+      const name = String(filename || "");
+      if (name && name !== "settings.yaml") return;
+      if (eventType === "rename" && !fs.existsSync(file)) return; // 删除/替换噪音
+      if (engineSettingsWatchTimer) clearTimeout(engineSettingsWatchTimer);
+      engineSettingsWatchTimer = setTimeout(() => {
+        engineSettingsWatchTimer = null;
+        onEngineSettingsChanged().catch((error) => err("engine settings watcher failed:", error.message));
+      }, 300);
+    });
+    engineSettingsWatchRetries = 0;
+    log("watching engine UI settings:", file);
+  } catch (error) {
+    // 目录可能还没被引擎建出来：稍后重试（引擎启动后会创建）。
+    err("cannot watch engine settings.yaml:", error.message);
+    if (engineSettingsWatchRetries < 10) {
+      engineSettingsWatchRetries += 1;
+      setTimeout(() => startEngineSettingsWatcher(), 5000);
+    }
+  }
+}
+
+function stopEngineSettingsWatcher() {
+  if (engineSettingsWatchTimer) {
+    clearTimeout(engineSettingsWatchTimer);
+    engineSettingsWatchTimer = null;
+  }
+  if (engineSettingsWatcher) {
+    try {
+      engineSettingsWatcher.close();
+    } catch {
+      /* ignore */
+    }
+    engineSettingsWatcher = null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// profile 热跟随（watch package.json + cordis.patch.yml + 市场 state.json）
+// ---------------------------------------------------------------------------
+//
+// 插件的两个正交状态各有各的文件：
+//   - 安装/卸载 → profiles/web/package.json 的 dsh.profile.bundles；
+//   - 启用/禁用 → profiles/web/cordis.patch.yml 的 `- id: X` + `disabled:` 行，
+//     市场另外把包名记进 profiles/web/.dsh-market/state.json 的 disabled 列表。
+// 用户在 Harness 页面的插件市场（dshmarket）里禁用/启用/卸载插件时改的就是这些
+// 文件。GUI 不主动同步这一侧，只在这里 watch 变化后重算并向设置窗口广播——
+// 状态由文件本身驱动，两侧显示自然一致。
+
+let profileWatcher = null;
+let profileWatchTimer = null;
+let profileWatchRetries = 0;
+let lastPluginStatusFingerprint = null;
+
+/** profile 清单路径（可能尚不存在：引擎首次运行前由 dsh 创建）。 */
+function profileManifestPath() {
+  return path.join(effectiveHomePath(), "profiles", "web", "package.json");
+}
+
+/** watch 时要关注的 profile 目录内文件名（其余名字一律忽略）。 */
+const PROFILE_WATCH_FILES = new Set(["package.json", "cordis.patch.yml"]);
+
+/** 市场状态目录里的 state.json（启用/禁用的市场侧记录）。 */
+function marketStateDir() {
+  return path.join(effectiveHomePath(), "profiles", "web", ".dsh-market");
+}
+
+function startProfileWatcher() {
+  stopProfileWatcher();
+  const dir = path.dirname(profileManifestPath());
+  const schedule = (label) => {
+    if (profileWatchTimer) clearTimeout(profileWatchTimer);
+    profileWatchTimer = setTimeout(() => {
+      profileWatchTimer = null;
+      onProfileChanged(label).catch((error) => err("profile watcher failed:", error.message));
+    }, 400);
+  };
+  try {
+    profileWatcher = fs.watch(dir, { persistent: false }, (eventType, filename) => {
+      const name = String(filename || "");
+      // 空 filename 是平台的兜底（无法给出名字时），此时仍需重算。
+      if (name && !PROFILE_WATCH_FILES.has(name)) return;
+      schedule(name || "profile");
+    });
+    profileWatchRetries = 0;
+    log("watching profile manifest:", profileManifestPath());
+  } catch (error) {
+    // 引擎还没建出 profiles/web：稍后重试。
+    err("cannot watch profile manifest:", error.message);
+    if (profileWatchRetries < 10) {
+      profileWatchRetries += 1;
+      setTimeout(() => startProfileWatcher(), 5000);
+    }
+  }
+  // 市场状态目录单独 watch：它建得比 profile 晚（引擎首次跑市场才出现），
+  // 所以用「不存在就重试」的独立循环，不能和上面的 profile watch 共用一个 try。
+  startMarketWatcher();
+}
+
+let marketWatcher = null;
+let marketWatchRetries = 0;
+
+function startMarketWatcher() {
+  if (marketWatcher) {
+    try {
+      marketWatcher.close();
+    } catch {
+      /* ignore */
+    }
+    marketWatcher = null;
+  }
+  const dir = marketStateDir();
+  if (!fs.existsSync(dir)) {
+    // 市场还没跑过：10 次（约 30s）内每 3s 试一次即可，之后由下一次
+    // startProfileWatcher（引擎重启/profile 变化）再挂。
+    if (marketWatchRetries < 10) {
+      marketWatchRetries += 1;
+      setTimeout(() => startMarketWatcher(), 3000);
+    }
+    return;
+  }
+  try {
+    marketWatcher = fs.watch(dir, { persistent: false }, (eventType, filename) => {
+      const name = String(filename || "");
+      if (name && name !== "state.json") return;
+      if (profileWatchTimer) clearTimeout(profileWatchTimer);
+      profileWatchTimer = setTimeout(() => {
+        profileWatchTimer = null;
+        onProfileChanged("market state").catch((error) => err("market watcher failed:", error.message));
+      }, 400);
+    });
+    marketWatchRetries = 0;
+    log("watching marketplace state:", path.join(dir, "state.json"));
+  } catch (error) {
+    err("cannot watch marketplace state:", error.message);
+  }
+}
+
+function stopProfileWatcher() {
+  if (profileWatchTimer) {
+    clearTimeout(profileWatchTimer);
+    profileWatchTimer = null;
+  }
+  if (profileWatcher) {
+    try {
+      profileWatcher.close();
+    } catch {
+      /* ignore */
+    }
+    profileWatcher = null;
+  }
+  if (marketWatcher) {
+    try {
+      marketWatcher.close();
+    } catch {
+      /* ignore */
+    }
+    marketWatcher = null;
+  }
+}
+
+/**
+ * profile 状态变化时：重算插件状态指纹，真的变了才广播（避免 GUI 自己安装/
+ * 卸载/切换启用时写文件触发的重复刷新）。设置窗口收到后会重绘列表。
+ */
+async function onProfileChanged(source = "profile") {
+  const status = pluginCatalogStatus(effectiveHomePath());
+  const fingerprint = statusFingerprint(status);
+  if (fingerprint === lastPluginStatusFingerprint) return;
+  lastPluginStatusFingerprint = fingerprint;
+  log(`plugin state changed outside the GUI (${source}):`, fingerprint);
+  broadcastSettings();
+}
+
+/**
+ * settings.yaml 变化时：主题/语言跟随引擎侧改动。GUI 自己写回的值会因“值相等”
+ * 被跳过，不会产生循环；语言只在 GUI 处于“跟随系统”模式时采纳，且只改 GUI
+ * 侧解析（不写回 yaml）。
+ */
+async function onEngineSettingsChanged() {
+  let parsed;
+  try {
+    parsed = parseEngineSettings(await fsp.readFile(path.join(effectiveHomePath(), "settings.yaml"), "utf8"));
+  } catch {
+    return; // 写入中/被替换，等下一次事件
+  }
+  const nextTheme = parsed.theme ?? engineThemePref;
+  if (nextTheme !== engineThemePref) {
+    log("engine theme changed:", engineThemePref, "->", nextTheme);
+    engineThemePref = nextTheme;
+    if ((settings.appearance ?? "engine") === "engine") {
+      applyHarnessTheme(nextTheme);
+      notifyChildWindowsTheme();
+    }
+  }
+  const nextLocale = parsed.locale ?? engineLocalePref;
+  if (nextLocale !== engineLocalePref) {
+    log("engine UI locale changed:", engineLocalePref, "->", nextLocale);
+    engineLocalePref = nextLocale;
+    if (settings.locale === "system" && nextLocale) {
+      // “跟随系统”时跟随引擎页面的语言选择：外壳文案立即重算并刷新。
+      buildMenu();
+      refreshTrayMenu();
+      applyEngineVersionChrome();
+      if (settingsWin && !settingsWin.isDestroyed()) settingsWin.setTitle(L("settings.titleBar"));
+      broadcastSettings();
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // UI 语言（GUI 与引擎同步）
 // ---------------------------------------------------------------------------
 
-/** 当前生效语言：zh | en（跟随系统时按 Electron 系统语言解析）。 */
+/**
+ * 当前生效语言：zh | en。
+ *  - locale=zh|en：显式选择；
+ *  - locale=system：优先跟随引擎设置文件里的语言（引擎页面即用它），没有则按
+ *    Electron 系统语言解析。
+ */
 function resolveUiLang() {
   if (settings.locale === "zh" || settings.locale === "en") return settings.locale;
+  if (engineLocalePref === "zh" || engineLocalePref === "en") return engineLocalePref;
   let sys = "en";
   try {
     const loc = String(app.getLocale() ?? "").toLowerCase();
@@ -1354,31 +1740,33 @@ function L(key, ...args) {
 }
 
 /**
- * 把生效语言写入引擎设置文件 <DSH_HOME>/settings.yaml 的 locale.preference
- * （zh|en）。引擎的 dsh-settings-file 会 watch 该文件并热发布，内置 Harness UI
- * 立即切换语言；因此页面内文案一并跟随。system 模式写入解析后的结果，
+ * 把 GUI 的语言/外观选择写入引擎设置文件 <DSH_HOME>/settings.yaml 的
+ * locale.preference / ui-theme.preference。引擎的 dsh-settings-file 会 watch
+ * 该文件并热发布，内置 Harness UI 立即跟随。system 语言模式写入解析后的结果，
  * 保持 GUI 与引擎一致。文件不存在或不可写时静默跳过（非致命）。
  */
-async function syncEngineUILocale() {
+async function syncEngineUI(patch) {
   const home = effectiveHomePath();
   const file = path.join(home, "settings.yaml");
-  const preference = resolveUiLang();
   await fsp.mkdir(home, { recursive: true }).catch(() => {});
   let doc;
+  let locale = null;
+  let theme = null;
   try {
     const text = await fsp.readFile(file, "utf8");
-    doc = YAML.parseDocument(text);
-    const existing = doc.getIn(["locale", "preference"]);
-    if (existing === preference) {
-      log("engine UI locale already:", preference);
-      return;
-    }
+    ({ doc, locale, theme } = parseEngineSettings(text));
   } catch {
     doc = YAML.parseDocument("");
   }
-  doc.setIn(["locale", "preference"], preference);
-  await fsp.writeFile(file, doc.toString(), "utf8");
-  log("engine UI locale synced:", file, "->", preference);
+  const changes = {};
+  if (patch.locale !== undefined && patch.locale !== null && patch.locale !== locale) changes.locale = patch.locale;
+  if (patch.theme !== undefined && patch.theme !== null && patch.theme !== theme) changes.theme = patch.theme;
+  if (Object.keys(changes).length === 0) {
+    log("engine UI settings already up to date");
+    return;
+  }
+  await fsp.writeFile(file, applyEngineSettings(doc, changes), "utf8");
+  log("engine UI settings synced:", file, "->", JSON.stringify(changes));
 }
 
 // ---------------------------------------------------------------------------
@@ -1935,7 +2323,7 @@ async function boot() {
 
   // UI 语言：GUI 与引擎同步（system 模式在启动时解析一次并写入引擎设置文件）。
   try {
-    await syncEngineUILocale();
+    await syncEngineUI({ locale: resolveUiLang() });
   } catch (error) {
     err("engine UI locale sync skipped:", error.message);
   }
@@ -1971,6 +2359,33 @@ async function boot() {
   }
   log("latest:", latest ?? "unreachable");
 
+  // 引擎树结构自检：老版本 GUI 用 `npm install --prefix ENGINE_DIR` 增量更新，
+  // 更新后根目录残留旧引擎的 hoist（cordis-plugin-loader 等），新依赖却沉进
+  // @deepseek-ai/dsh 的 nested node_modules —— cordis-plugin-loader 在根 import
+  // 不到 nested 的 @deepseek-ai/dsh-client-ui-* → ERR_MODULE_NOT_FOUND 挡死整个
+  // 启动。健康安装是全部 hoist 到根。探针命中这种混合残留时，强制按当前版本
+  // 走一次干净重装（npmInstall 现在是临时前缀 + 原子替换，产物必然干净布局）；
+  // 24h 冷却防误判反复重装；注册表不可达则只记日志，等下次可达再修。
+  const hybridEngineTree =
+    installed !== null &&
+    !fs.existsSync(path.join(ENGINE_DIR, "node_modules", "@deepseek-ai", "dsh-client-ui-commands")) &&
+    fs.existsSync(
+      path.join(ENGINE_DIR, "node_modules", "@deepseek-ai", "dsh", "node_modules", "@deepseek-ai", "dsh-client-ui-commands"),
+    ) &&
+    fs.existsSync(path.join(ENGINE_DIR, "node_modules", "@deepseek-ai", "cordis-plugin-loader"));
+  const repairCooled =
+    !(typeof settings.lastEngineRepairAt === "number" && Date.now() - settings.lastEngineRepairAt < 24 * 3600 * 1000);
+  const forceEngineReinstall = hybridEngineTree && repairCooled && latest !== null;
+  if (hybridEngineTree) {
+    log(
+      forceEngineReinstall
+        ? `engine tree is a stale hoist mix; clean reinstall of ${installed} scheduled`
+        : latest === null
+          ? "engine tree is a stale hoist mix but registry is unreachable; will repair on a later launch"
+          : "engine tree is a stale hoist mix; repair skipped within cooldown",
+    );
+  }
+
   // A Node runtime change (e.g. first run with a bundled portable node) makes
   // the previously installed engine's native modules ABI-incompatible -> reinstall.
   const nodeChanged = Boolean(
@@ -1979,7 +2394,8 @@ async function boot() {
   const updateNeeded =
     installed === null ||
     (latest !== null && semver.lt(installed, latest)) ||
-    nodeChanged;
+    nodeChanged ||
+    forceEngineReinstall;
   log("updateNeeded:", updateNeeded, "| nodeChanged:", Boolean(nodeChanged));
 
   if (updateNeeded) {
@@ -2012,7 +2428,7 @@ async function boot() {
       const policy = settings.updatePolicy;
 
       // "ask": let the user choose, unless we have no choice at all.
-      if (policy === "ask" && installed !== null && !nodeChanged && latest !== null) {
+      if (policy === "ask" && installed !== null && !nodeChanged && !forceEngineReinstall && latest !== null) {
         const { response } = await dialog
           .showMessageBox(win, {
             type: "question",
@@ -2034,8 +2450,9 @@ async function boot() {
         }
       }
 
-      // "notify": only inform, never install (unless we must install to run at all).
-      if (policy === "notify" && installed !== null && !nodeChanged && latest !== null) {
+      // "notify": only inform, never install (unless we must install to run at all,
+      // or the tree is broken and needs a same-version repair).
+      if (policy === "notify" && installed !== null && !nodeChanged && !forceEngineReinstall && latest !== null) {
         log("notify-only policy: skipping install");
         showUpdateNotice(L("update.notice.found", latest), L("update.notice.detailAuto"));
         setStatus(L("update.status.found", latest), L("update.starting"));
@@ -2055,7 +2472,11 @@ async function boot() {
         log("engine updated to", installedNow ?? latest);
         engineVersion = installedNow;
         applyEngineVersionChrome();
-        await saveSettings({ engineNode: nodeVersion ?? settings.engineNode, lastNotifiedVersion: undefined });
+        await saveSettings({
+          engineNode: nodeVersion ?? settings.engineNode,
+          lastNotifiedVersion: undefined,
+          ...(forceEngineReinstall ? { lastEngineRepairAt: Date.now() } : {}),
+        });
         if (installedNow && installedNow !== installed) {
           showUpdateNotice(L("update.notice.updated", installedNow), L("update.notice.thisLaunch"));
         }
@@ -2101,38 +2522,98 @@ async function boot() {
 async function startEngine(nodeExec) {
   setStatus(L("update.starting"), L("update.firstInit"));
   // 给引擎客户端打幂等小补丁（“重启回最近会话”页内逻辑；锚点不匹配跳过不阻塞）。
+  // 注意：这只是**兜底**。主实现是插件 dsh-gui-last-session；补丁在锚点存在时
+  // 仍会打上（旧引擎/未装插件的用户照常可用），锚点不存在就跳过、不再因版本号
+  // 不同而静默失效。
   try {
     ensureEnginePatches({ engineDir: ENGINE_DIR, log });
   } catch (error) {
     err("engine patch skipped:", error.message);
   }
-  // 启动时自动安装/挂载已勾选的第三方插件（幂等；任一步失败只记日志，不影响启动）。
-  // 同时做“引擎兼容性”预检：GUI 勾选、已装但当前引擎不兼容的目录插件（会在
-  // profile 启动时把引擎打崩，如 dsh-agent-teams 0.1.15 ↔ 0.1.2-rc.1）在 spawn
-  // 引擎之前移除，保证本次启动可用；非 GUI 勾选的已装插件不静默清理（交给启动
-  // 失败诊断弹窗，由用户点「禁用并重启」）。autoPlugins 为空但 profile 里已有
-  // 额外 bundle 时也要跑，因此按“有勾选或有已装额外插件”决定是否需要 pnpm 对账。
+  // 把 GUI 自己的“最近会话”指针交接给插件（单向补齐，插件已有则不覆盖）。
+  await handOffLastSessionToPlugin();
+  // 第三方插件对账（幂等；任一步失败只记日志，不影响启动）。
+  // 勾选框 = 安装状态的实时镜像（不再持久化期望集合），所以启动时**不存在**
+  // “按上次勾选自动安装”这回事——profile 里的已装集合本身就是状态。启动对账
+  // 只做两件维护（针对目录内**已安装**的条目）：
+  //   1. 捆绑插件的随包源版本落后于应用版本时重装（让 profile 拷贝跟上代码）；
+  //   2. 已装但对当前引擎不兼容的目录插件（会让 profile 启动崩溃，如
+  //      dsh-agent-teams 0.1.15 ↔ 0.1.2-rc.1）在 spawn 引擎前移除。
+  // 非目录/用户手动装的额外 bundle 一律不动（交给“启动失败诊断”弹窗处理）。
+  // 没有已装的目录插件时跳过整个对账（省掉一次 pnpm 自举）。
   pluginsInstalledThisLaunch = [];
   startupDiagnosisDone = false;
-  const autoPluginIds = Array.isArray(settings.autoPlugins) ? settings.autoPlugins : [];
-  const profileBundles = readInstalledProfileBundles(effectiveHomePath());
-  const extraBundlesPresent = profileBundles.some(
-    (pkg) => pkg !== "@deepseek-ai/dsh-base" && pkg !== "@deepseek-ai/dsh-web-app",
+  // 自愈：修剪 profile 里不可解析 / 失效的 bundle 登记。引擎 reconcile 单靠
+  // 自己清不掉这类条目（`dsh plugin remove` 会因依赖缺失报错、reconcile 又只
+  // 管“依赖里成功解析且声明 dsh.bundle”的包），坏掉的安装/卸载留下的 stale
+  // 登记会把引擎启动挡死（`cannot resolve profile bundle`）。这里在 spawn 前
+  // 直接对账 manifest——有则修剪/补装，无则零开销返回。任何失败只记日志。
+  try {
+    const healed = await healProfileBundlesFn({
+      engineDir: ENGINE_DIR,
+      dshHome: effectiveHomePath(),
+      nodeExec,
+      pnpmInstallDir: path.join(userDataDir(), "pnpm-tools"),
+      log,
+    });
+    if (healed.changed) {
+      log(
+        "profile bundle self-heal:",
+        healed.pruned.length > 0 ? `pruned [${healed.pruned.join(", ")}]` : "no prune",
+        healed.repaired.length > 0 ? `repaired [${healed.repaired.join(", ")}]` : "",
+      );
+    }
+    if (healed.errors.length > 0) err("profile bundle self-heal issues:", healed.errors.join(" | "));
+  } catch (error) {
+    err("profile bundle self-heal skipped:", error.message);
+  }
+  // 旧插件清理必须**先于**安装对账：目录条目改名后，profile 里还留着旧包名的
+  // 登记与拷贝，而启动维护只按当前 CATALOG 对账、看不见它们 —— 结果新旧两版同时
+  // 加载（两个页内控件 + 路由冲突）。这里摘除旧包，并把「替代条目」交给下面的
+  // 安装对账，让原先装过它的用户平滑换成新插件（含沿用启用/禁用意图）。
+  let legacyPlugins = { pruned: [], removedRows: [], replaced: [], changed: false };
+  try {
+    legacyPlugins = await removeLegacyPlugins({
+      engineDir: ENGINE_DIR,
+      dshHome: effectiveHomePath(),
+      nodeExec,
+      pnpmInstallDir: path.join(userDataDir(), "pnpm-tools"),
+      log,
+    });
+    if (legacyPlugins.changed) {
+      log(
+        "legacy plugins cleaned:",
+        legacyPlugins.pruned.length > 0 ? `pruned [${legacyPlugins.pruned.join(", ")}]` : "",
+        legacyPlugins.removedRows.length > 0 ? `rows [${legacyPlugins.removedRows.join(", ")}]` : "",
+        legacyPlugins.replaced.length > 0 ? `replaced by [${legacyPlugins.replaced.join(", ")}]` : "",
+      );
+    }
+  } catch (error) {
+    err("legacy plugin cleanup skipped:", error.message);
+  }
+  const bootStatus = pluginCatalogStatus(effectiveHomePath());
+  const installedCatalogIds = PLUGIN_CATALOG.filter((entry) => bootStatus[entry.id] && bootStatus[entry.id].installed).map(
+    (entry) => entry.id,
   );
-  if (autoPluginIds.length > 0 || extraBundlesPresent) {
+  // 被旧插件替代的条目视为「用户本来就要用」——原样装上，别让改名把功能弄丢。
+  for (const id of legacyPlugins.replaced) {
+    if (!installedCatalogIds.includes(id)) installedCatalogIds.push(id);
+  }
+  if (installedCatalogIds.length > 0) {
     try {
       const syncResult = await syncEnabledPlugins({
-        enabledIds: autoPluginIds,
+        enabledIds: installedCatalogIds,
         engineDir: ENGINE_DIR,
         dshHome: effectiveHomePath(),
         nodeExec,
         pnpmInstallDir: path.join(userDataDir(), "pnpm-tools"),
         stagingRoot: pluginBundledPluginsDir(),
+        mode: "install",
         log,
       });
       if (syncResult.installed.length > 0) {
         pluginsInstalledThisLaunch = syncResult.installed;
-        log("auto-installed plugins:", syncResult.installed.join(", "));
+        log("updated bundled plugins:", syncResult.installed.join(", "));
         // 测试钩子：破坏刚装的插件 bundle（模拟“坏插件导致引擎启动失败”）。
         if (process.env.DSH_SHELL_TEST_BREAK_PLUGIN) {
           const fsx = require("node:fs");
@@ -2151,22 +2632,27 @@ async function startEngine(nodeExec) {
       }
       if (syncResult.removed.length > 0) {
         log("auto-removed engine-incompatible plugins:", syncResult.removed.join(", "));
-        await saveSettings({
-          autoPlugins: autoPluginIds.filter((id) => !syncResult.removed.includes(id)),
-        }).catch((error) => err("persist incompatible plugin removal failed:", error.message));
       }
       if (syncResult.skipped.length > 0) {
         log("skipped engine-incompatible plugins:", syncResult.skipped.join(", "));
       }
-      if (syncResult.errors.length > 0) err("auto plugin install issues:", syncResult.errors.join(" | "));
+      if (syncResult.errors.length > 0) err("plugin maintenance issues:", syncResult.errors.join(" | "));
     } catch (error) {
-      err("auto plugin sync skipped:", error.message);
+      err("plugin maintenance skipped:", error.message);
     }
+  }
+  // 启用/禁用对账（与安装集合无关，独立于上面的 if）：市场里禁用过的插件若补丁层
+  // 还没落下，这里补上——否则市场显示「已禁用」而引擎照常加载它。
+  try {
+    const enabledSync = reconcilePluginEnabled({ dshHome: effectiveHomePath(), log });
+    if (enabledSync.changed) log("plugin enable-state synced:", enabledSync.healed.join(", "));
+  } catch (error) {
+    err("plugin enable-state reconcile skipped:", error.message);
   }
   let settled = false;
 
   // 引擎启动失败兜底：本次刚自动装过插件且 dsh 迟迟不就绪/提前退出/报错时，
-  // 把刚装的插件逐个 remove 并从 autoPlugins 取消勾选，提示后重试一次。
+  // 把刚装的插件逐个 remove（勾选框随之经 watch 实时取消勾选），提示后重试一次。
   const clearWatchdog = () => {
     if (pluginReadyWatchdog) {
       clearTimeout(pluginReadyWatchdog);
@@ -2223,16 +2709,13 @@ async function startEngine(nodeExec) {
       err("plugin exclusion failed:", error);
     }
     if (removed.length > 0) {
-      await saveSettings({
-        autoPlugins: (settings.autoPlugins ?? []).filter((id) => !removed.includes(id)),
-      }).catch((error) => err("persist plugin exclusion failed:", error.message));
       showUpdateNotice(
         L("plugin.excluded.title"),
         L("plugin.excluded.msg", removed.map((id) => PLUGIN_CATALOG.find((c) => c.id === id)?.pkg ?? id).join(", ")),
       );
     }
     setStatus(L("engine.startFailed"), L("plugin.excluded.title"));
-    // 剔除后重试一次（autoPlugins 已去掉坏插件，不会再自动装回）。
+    // 剔除后重试一次（坏插件已从 profile 移除，这次不会再装回）。
     await startEngine(nodeExec);
   };
 
@@ -2332,6 +2815,229 @@ async function startEngine(nodeExec) {
 // IPC (settings window)
 // ---------------------------------------------------------------------------
 
+/**
+ * 安装/卸载进度推给设置窗口（阶段文字实时刷新，避免长时间无反馈像卡死）。
+ */
+function sendSettingsProgress(text) {
+  if (settingsWin && !settingsWin.isDestroyed()) {
+    try {
+      settingsWin.webContents.send("plugins:progress", { text: String(text ?? ""), at: Date.now() });
+    } catch {
+      /* 窗口正在销毁，忽略 */
+    }
+  }
+}
+
+/** 包一层 log：既走主进程日志，也实时推送进度给设置窗口。 */
+function progressLogFor(header) {
+  sendSettingsProgress(header);
+  return (...args) => {
+    const line = args.map(String).join(" ");
+    log(line);
+    sendSettingsProgress(line);
+  };
+}
+
+/**
+ * 勾选框的即时安装/卸载。复用 syncEnabledPlugins：
+ *  - install：以单个 id 为目标（install 模式，只增不删；捆绑插件自动 staging、
+ *    引擎不兼容自动跳过）；
+ *  - remove：以“当前已装集合去掉目标”为目标（sync 模式）→ 恰好只卸目标一个
+ *    （目录外/用户手动装的 bundle 不在目录里，天然不动）。
+ * 成功后广播新状态，让设置窗口按安装状态实时重绘勾选。期间逐阶段发送进度。
+ */
+async function runPluginInstallUninstall(entry, action) {
+  const progressLog = progressLogFor(action === "install" ? "installing " + entry.pkg : "removing " + entry.pkg);
+  try {
+    const common = {
+      engineDir: ENGINE_DIR,
+      dshHome: effectiveHomePath(),
+      nodeExec: resolveNodeExecutable(),
+      pnpmInstallDir: path.join(userDataDir(), "pnpm-tools"),
+      stagingRoot: pluginBundledPluginsDir(),
+      log: progressLog,
+    };
+    let result;
+    if (action === "install") {
+      result = await syncEnabledPlugins({ enabledIds: [entry.id], mode: "install", ...common });
+    } else {
+      const status = pluginCatalogStatus(effectiveHomePath());
+      const installedIds = PLUGIN_CATALOG.filter((e) => status[e.id] && status[e.id].installed)
+        .map((e) => e.id)
+        .filter((id) => id !== entry.id);
+      result = await syncEnabledPlugins({ enabledIds: installedIds, mode: "sync", ...common });
+    }
+    broadcastSettings();
+    sendSettingsProgress(action === "install" ? "install done" : "remove done");
+    const ok =
+      action === "install" ? result.installed.includes(entry.id) : result.removed.includes(entry.id);
+    return {
+      ok,
+      skipped: result.skipped.includes(entry.id),
+      changed: result.changed,
+      error: ok ? null : (result.errors[0] ?? null),
+      errors: result.errors,
+      status: pluginCatalogStatus(effectiveHomePath()),
+    };
+  } catch (error) {
+    err("plugin " + action + " failed:", error);
+    sendSettingsProgress("failed: " + ((error && error.message) || error));
+    return {
+      ok: false,
+      skipped: false,
+      changed: false,
+      error: String((error && error.message) || error),
+      errors: [String((error && error.message) || error)],
+      status: pluginCatalogStatus(effectiveHomePath()),
+    };
+  }
+}
+
+/**
+ * 调用插件市场自己的开关接口——与市场页面上那个开关**完全同一条路径**。
+ *
+ *   POST <engineOrigin>/dsh-market/toggle   {"name": "<pkg>", "enabled": <bool>}
+ *
+ * 为什么必须走市场的接口，而不是自己写补丁层：
+ *  - 市场不只写文件，还用 loader 句柄做**在线**切换（hotUnmount / entry.update），
+ *    并处理「宿主基础设施禁止开关」「carrier bundle 要连 bundles 一起摘」「主题
+ *    互斥」这些情况；纯写文件只能覆盖其中一部分。
+ *  - 它还会返回 `restart` / `refresh`：有客户端半体的插件（如 OpenCode Go 用量）
+ *    禁用后，页面里**已经加载**的那半不会自己消失，需要刷新页面——市场据此弹
+ *    「刷新后生效」提示。自己写文件拿不到这个信号。
+ *  - 同一套校验（未安装 / 受保护模块 / 市场自身）保持两侧行为一致。
+ *
+ * 市场用 sameOrigin() 校验（Origin 的 host 必须等于 Host），所以显式带上
+ * Origin 头；curl/浏览器之外没有别的地方会替我们加。
+ *
+ * @returns {Promise<{available:boolean,status?:number,json?:object,reason?:string}>}
+ *   available=false 表示市场这条路走不通（引擎没在跑、连不上、或该版本没有这个
+ *   路由），调用方回退到直接写补丁层。
+ */
+function callMarketToggle(pkg, enabled) {
+  return new Promise((resolve) => {
+    let origin;
+    try {
+      origin = new URL(lastEngineUrl).origin;
+    } catch {
+      resolve({ available: false, reason: "engine is not running" });
+      return;
+    }
+    const body = JSON.stringify({ name: pkg, enabled: Boolean(enabled) });
+    let settled = false;
+    const done = (value) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    const req = http.request(
+      `${origin}/dsh-market/toggle`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "content-length": Buffer.byteLength(body),
+          origin,
+        },
+        timeout: 20000,
+      },
+      (res) => {
+        let text = "";
+        res.setEncoding("utf8");
+        res.on("data", (chunk) => {
+          text += chunk;
+        });
+        res.on("end", () => {
+          let json = null;
+          try {
+            json = JSON.parse(text);
+          } catch {
+            /* 非 JSON 响应（如引擎的 404 页面）-> 由调用方按状态码决定回退 */
+          }
+          done({ available: true, status: res.statusCode ?? 0, json, text });
+        });
+      },
+    );
+    req.on("timeout", () => req.destroy(new Error("market toggle timed out")));
+    req.on("error", (error) => done({ available: false, reason: error.message }));
+    req.end(body);
+  });
+}
+
+/**
+ * 第三方插件的启用/禁用（与 dshmarket 的开关保持一致）。
+ *
+ * 优先走市场的 `/dsh-market/toggle`（在线切换 + 正确的 restart/refresh 信号 +
+ * 同一套保护规则）；只有在市场这条路不可用（引擎未运行 / 连不上 / 该版本没有
+ * 这个路由）时才回退到直接写 profile 补丁层 + 市场 state.json——那条路在
+ * `patchReload: live` 的 web profile 上同样能被引擎在线重组合（实测 ~0.7s），
+ * 只是缺少 restart/refresh 信号与市场的保护规则。
+ *
+ * 注意：市场**明确拒绝**时（403 受保护 / 400 未安装 / 市场自身）绝不回退到写文件
+ * ——那等于绕过市场的保护，两侧行为就不一致了。
+ */
+async function runPluginSetEnabled(entry, enabled) {
+  const progressLog = progressLogFor((enabled ? "enabling " : "disabling ") + entry.pkg);
+  const dshHome = effectiveHomePath();
+  try {
+    const market = await callMarketToggle(entry.pkg, enabled);
+    if (market.available && market.status === 200 && market.json && market.json.ok) {
+      const state = market.json.activation?.[entry.pkg]?.state ?? null;
+      sendSettingsProgress(
+        (enabled ? "enabled " : "disabled ") + entry.pkg + (state ? " (" + state + ")" : ""),
+      );
+      broadcastSettings();
+      return {
+        ok: true,
+        changed: true,
+        via: "market",
+        restart: market.json.restart === true,
+        refresh: market.json.refresh === true,
+        activation: state,
+        status: pluginCatalogStatus(dshHome),
+      };
+    }
+    if (market.available && market.status >= 400) {
+      // 市场按自己的规则拒绝了：原样把原因交给界面，不回退写文件。
+      const reason =
+        (market.json && market.json.error) ||
+        market.text?.slice(0, 300) ||
+        `market refused (HTTP ${market.status})`;
+      err("market toggle refused:", entry.pkg, reason);
+      sendSettingsProgress("failed: " + reason);
+      return { ok: false, changed: false, via: "market", error: String(reason), status: pluginCatalogStatus(dshHome) };
+    }
+
+    // ---- 回退：市场不可用（未安装 / 老版本 / 引擎没跑）----
+    progressLog(
+      "market toggle unavailable" + (market.reason ? ` (${market.reason})` : "") + "; writing the profile patch layer",
+    );
+    const rowIds = packageRowIds(dshHome, entry.pkg);
+    const res = setPluginEnabled({ dshHome, pkg: entry.pkg, rowIds, enabled });
+    broadcastSettings();
+    sendSettingsProgress(enabled ? "enable done (patch layer)" : "disable done (patch layer)");
+    return {
+      ok: res.ok,
+      changed: res.changed,
+      via: "file",
+      // 补丁层这条路没有市场的激活态信息：客户端半体仍需刷新页面才消失。
+      refresh: true,
+      error: res.ok ? null : (res.reason ?? null),
+      rowIds,
+      status: pluginCatalogStatus(dshHome),
+    };
+  } catch (error) {
+    err("plugin " + (enabled ? "enable" : "disable") + " failed:", error);
+    sendSettingsProgress("failed: " + ((error && error.message) || error));
+    return {
+      ok: false,
+      changed: false,
+      error: String((error && error.message) || error),
+      status: pluginCatalogStatus(effectiveHomePath()),
+    };
+  }
+}
+
 function registerIpc() {
   ipcMain.handle("settings:get", () => settingsPayload());
   ipcMain.handle("settings:set", async (_event, patch) => {
@@ -2350,23 +3056,120 @@ function registerIpc() {
   // 设置窗口「立即检查引擎更新」：查新版 → 按选择下载安装（弹窗在主进程完成）。
   ipcMain.handle("settings:update-check", () => runManualEngineUpdate());
 
-  // 设置窗口勾选插件后立即安装（幂等）；卸载需等下次启动前对账或手动移除。
+  // 勾选框 = 安装状态实时镜像（不持久化期望集合）。勾选/取消勾选立即对 profile
+  // 生效：装一个 / 卸一个，随后广播新状态让设置窗口重新渲染。返回
+  // { ok, skipped, error, changed, status } —— ok=false 且 skipped=true 表示
+  // 引擎不兼容未装；error 为安装/卸载失败信息。
+  ipcMain.handle("plugins:install", async (_event, id) => {
+    const entry = PLUGIN_CATALOG.find((c) => c.id === id);
+    if (!entry) return { ok: false, error: "unknown plugin: " + String(id) };
+    return runPluginInstallUninstall(entry, "install");
+  });
+  ipcMain.handle("plugins:remove", async (_event, id) => {
+    const entry = PLUGIN_CATALOG.find((c) => c.id === id);
+    if (!entry) return { ok: false, error: "unknown plugin: " + String(id) };
+    return runPluginInstallUninstall(entry, "remove");
+  });
+
+  // 启用/禁用（第二个勾选框）：状态镜像 + 走市场的开关接口（见 callMarketToggle）。
+  ipcMain.handle("plugins:set-enabled", async (_event, id, enabled) => {
+    const entry = PLUGIN_CATALOG.find((c) => c.id === id);
+    if (!entry) return { ok: false, error: "unknown plugin: " + String(id) };
+    return runPluginSetEnabled(entry, enabled !== false);
+  });
+
+  // 「刷新 Harness 页面」：禁用/启用带客户端半体的插件后，页面里已经加载的那半
+  // 不会自己消失/出现，需要重新加载页面才与引擎的实际组合一致。市场的开关也是
+  // 这个语义（它返回 refresh 并显示「刷新后生效」），这里给设置窗口一个等价的
+  // 动作按钮。重新加载只重取引擎 URL，会话数据都在 $DSH_HOME 里，不会丢。
+  ipcMain.handle("dsh-gui:reload-engine-window", () => {
+    if (!win || win.isDestroyed()) return { ok: false, error: "main window is gone" };
+    if (!lastEngineUrl) return { ok: false, error: "engine is not running" };
+    win.loadURL(lastEngineUrl).catch((error) => err("engine reload failed:", error.message));
+    return { ok: true };
+  });
+
+  // 设置窗口「修复 / 重试」：勾选框已实时镜像安装状态，不再有“收敛到勾选”的
+  // 语义——这里以“当前已安装集合”为目标再对账一遍：补拉捆绑插件的随包更新、
+  // 清理不一致，且**绝不卸载**用户手动装的东西（install 模式只增不删）。返回
+  // changed 供页面提示“需重启引擎”。期间逐阶段发送进度。
   ipcMain.handle("settings:plugin-sync", async () => {
+    const progressLog = progressLogFor("repairing plugins");
     try {
+      // 先自愈：清掉不可解析/失效的 bundle 登记（坏安装留下的 stale 条目会让
+      // 引擎启动失败），再对账目录插件。
+      let healed;
+      try {
+        healed = await healProfileBundlesFn({
+          engineDir: ENGINE_DIR,
+          dshHome: effectiveHomePath(),
+          nodeExec: resolveNodeExecutable(),
+          pnpmInstallDir: path.join(userDataDir(), "pnpm-tools"),
+          log: progressLog,
+        });
+        if (healed.changed)
+          progressLog(
+            `self-heal: pruned [${healed.pruned.join(", ")}]${healed.repaired.length ? ` repaired [${healed.repaired.join(", ")}]` : ""}`,
+          );
+      } catch (error) {
+        err("plugin self-heal failed:", error);
+        healed = { pruned: [], repaired: [], changed: false, errors: [String((error && error.message) || error)] };
+      }
+      // 「修复 / 重试」也清一次旧插件：目录条目改名后 profile 里可能留着旧包名，
+      // 不清就会新旧两版同时加载。
+      let legacy = { pruned: [], removedRows: [], changed: false };
+      try {
+        legacy = await removeLegacyPlugins({
+          engineDir: ENGINE_DIR,
+          dshHome: effectiveHomePath(),
+          nodeExec: resolveNodeExecutable(),
+          pnpmInstallDir: path.join(userDataDir(), "pnpm-tools"),
+          log: progressLog,
+        });
+        if (legacy.changed)
+          progressLog(
+            `legacy plugins: pruned [${legacy.pruned.join(", ")}]${legacy.removedRows.length ? ` rows [${legacy.removedRows.join(", ")}]` : ""}`,
+          );
+      } catch (error) {
+        err("legacy plugin cleanup failed:", error);
+      }
+      const status = pluginCatalogStatus(effectiveHomePath());
+      const installedIds = PLUGIN_CATALOG.filter((entry) => status[entry.id] && status[entry.id].installed).map(
+        (entry) => entry.id,
+      );
       const result = await syncEnabledPlugins({
-        enabledIds: settings.autoPlugins ?? [],
+        enabledIds: installedIds,
         engineDir: ENGINE_DIR,
         dshHome: effectiveHomePath(),
         nodeExec: resolveNodeExecutable(),
         pnpmInstallDir: path.join(userDataDir(), "pnpm-tools"),
         stagingRoot: pluginBundledPluginsDir(),
-        log,
+        mode: "install",
+        log: progressLog,
       });
+      // 「修复 / 重试」同时把启用/禁用对账一遍：市场里禁用过的插件若补丁层还没
+      // 落下（market state.json 与 cordis.patch.yml 不一致），补上禁用行——否则
+      // 市场显示「已禁用」而引擎照常加载。
+      let enabledSync = { healed: [], changed: false };
+      try {
+        enabledSync = reconcilePluginEnabled({ dshHome: effectiveHomePath(), log: progressLog });
+        if (enabledSync.changed) progressLog(`enable-state synced: [${enabledSync.healed.join(", ")}]`);
+      } catch (error) {
+        err("plugin enable-state reconcile failed:", error);
+      }
       broadcastSettings();
-      return { ...result, status: pluginCatalogStatus(effectiveHomePath()) };
+      sendSettingsProgress("repair done");
+      return { ...result, healed, enabledSync, legacy, status: pluginCatalogStatus(effectiveHomePath()) };
     } catch (error) {
       err("plugin sync failed:", error);
-      return { installed: [], errors: [String((error && error.message) || error)] };
+      sendSettingsProgress("failed: " + ((error && error.message) || error));
+      return {
+        installed: [],
+        removed: [],
+        skipped: [],
+        changed: false,
+        errors: [String((error && error.message) || error)],
+      };
     }
   });
 
@@ -2380,6 +3183,10 @@ function registerIpc() {
   });
 
   // “最近一次对话”记忆：记录 / 读取用户最后使用的会话（重启后自动打开）。
+  //
+  // 这是**旧**实现（页内补丁经 window.__dshGui 桥调用）留下的 IPC。现在主实现是
+  // 插件 `dsh-gui-last-session`（宿主侧自己写 <DSH_HOME>/last-session.json），
+  // 插件装好后不再需要这条桥——保留它只为兼容“插件未安装/未生效”的兜底场景。
   function lastSessionFile() {
     return path.join(userDataDir(), "last-session.json");
   }
@@ -2399,6 +3206,45 @@ function registerIpc() {
   });
 }
 
+/**
+ * 把 GUI 自己的“最近会话”指针交接给插件。
+ *
+ * 插件把指针存在 <DSH_HOME>/last-session.json（与 GUI 的 <userData> 不同）。
+ * 只做单向的“旧 -> 新”补齐：仅在插件侧还没有指针、而 GUI 侧有时才写入，避免
+ * 用一份过期数据覆盖插件已经记录好的更新结果。
+ */
+async function handOffLastSessionToPlugin() {
+  try {
+    const pluginFile = path.join(effectiveHomePath(), "last-session.json");
+    const guiFile = path.join(userDataDir(), "last-session.json");
+    let pluginPointer = null;
+    try {
+      const parsed = JSON.parse(await fsp.readFile(pluginFile, "utf8"));
+      if (typeof parsed?.sessionId === "string" && parsed.sessionId.startsWith("session-")) pluginPointer = parsed;
+    } catch {
+      /* plugin has no pointer yet */
+    }
+    if (pluginPointer) return;
+    let guiPointer = null;
+    try {
+      const parsed = JSON.parse(await fsp.readFile(guiFile, "utf8"));
+      if (typeof parsed?.sessionId === "string" && parsed.sessionId.startsWith("session-")) guiPointer = parsed;
+    } catch {
+      /* nothing to hand over */
+    }
+    if (!guiPointer) return;
+    await fsp.mkdir(path.dirname(pluginFile), { recursive: true });
+    await fsp.writeFile(
+      pluginFile,
+      JSON.stringify({ sessionId: guiPointer.sessionId, updatedAt: guiPointer.updatedAt ?? Date.now() }),
+      "utf8",
+    );
+    log("handed the last-session pointer over to the plugin:", guiPointer.sessionId);
+  } catch (error) {
+    err("last-session hand-off failed (non-fatal):", error.message);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // app lifecycle
 // ---------------------------------------------------------------------------
@@ -2412,14 +3258,19 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(async () => {
     await loadSettings();
-    // Read DeepSeek Harness' own appearance setting first, then show windows
-    // according to it (requirement: 窗口启动时先读取外观设置再显示).
-    const harnessTheme = await readHarnessTheme();
-    applyHarnessTheme(harnessTheme);
+    // Read DeepSeek Harness' own appearance/locale first, then show windows
+    // according to them (requirement: 窗口启动时先读取外观设置再显示).
+    await readEngineUiPrefs();
+    applyHarnessTheme(engineThemePref);
     registerIpc();
     buildMenu();
     createTray();
     createWindow();
+    // 热跟随 <DSH_HOME>/settings.yaml：引擎页面里换主题/语言，外壳立即跟上。
+    startEngineSettingsWatcher();
+    // 热跟随 <DSH_HOME>/profiles/web/package.json：插件市场那边禁用/卸载插件后，
+    // 设置窗口的第三方插件勾选状态要跟着刷新。
+    startProfileWatcher();
     // Test/CI hook: open the settings window right after startup.
     if (process.env.DSH_SHELL_TEST_OPEN_SETTINGS) {
       setImmediate(() => openSettingsWindow());
@@ -2438,6 +3289,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on("before-quit", () => {
     quitting = true;
+    stopProfileWatcher();
     if (tray) {
       tray.destroy();
       tray = null;

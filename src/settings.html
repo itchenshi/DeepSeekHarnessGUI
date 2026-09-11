@@ -20,15 +20,23 @@
     h1 { font-size: 15px; font-weight: 600; margin: 0 0 2px; }
     .sub { color: #5c6b7a; font-size: 12px; margin: 0 0 8px; }
     [data-theme="light"] .sub { color: #9aa0a6; }
-    /* 双列栅格：短分组（语言/数据目录/关闭/会话）两两一行，长分组（引擎更新/
-       第三方插件）左右平衡，尽量让笔记本一屏放满。 */
+    /* 三行两列：左列（关闭窗口 / 数据目录 / 引擎更新）从上到下排，右列
+       （第三方插件）纵贯三行 —— 语言/外观/会话已移除，设置收敛到引擎页面。 */
     main.colgrid {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-areas:
+        "close plugins"
+        "datadir plugins"
+        "engine plugins";
       gap: 6px 20px;
       align-items: start;
       margin-top: 8px;
     }
+    section.g-close { grid-area: close; }
+    section.g-datadir { grid-area: datadir; }
+    section.g-engine { grid-area: engine; }
+    section.g-plugins { grid-area: plugins; }
     section { min-width: 0; }
     h2 {
       font-size: 12px;
@@ -79,8 +87,58 @@
     }
     [data-theme="light"] button.dsh-btn { border-color: #d0d7de; }
     button.dsh-btn:disabled { opacity: 0.6; cursor: default; }
+    /* 插件有实际变动时的「需重启引擎」提示：高亮重启按钮（不改布局尺寸）。 */
+    button.dsh-btn.attn {
+      border-color: #4d9fff;
+      color: #4d9fff;
+      animation: attnPulse 1.2s ease-in-out 2;
+    }
+    [data-theme="light"] button.dsh-btn.attn { border-color: #2b6fd6; color: #2b6fd6; }
+    @keyframes attnPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(77, 159, 255, 0); }
+      50% { box-shadow: 0 0 0 3px rgba(77, 159, 255, 0.35); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      button.dsh-btn.attn { animation: none; }
+    }
     #curEngine { font-size: 12px; opacity: 0.8; }
     #saved { color: #4d9fff; font-size: 12px; min-height: 14px; margin-top: 2px; text-align: right; }
+    /* 安装/卸载进行中的进度条：不确定态转圈 + 阶段文字。 */
+    #pluginProgress {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 5px;
+      font-size: 12px;
+      color: #4d9fff;
+    }
+    #pluginProgress[hidden] { display: none; }
+    .progress-track {
+      position: relative;
+      flex: 1;
+      height: 5px;
+      min-width: 80px;
+      border-radius: 3px;
+      overflow: hidden;
+      background: rgba(77, 107, 254, 0.15);
+    }
+    .progress-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: 40%;
+      border-radius: 3px;
+      background: linear-gradient(90deg, #4d6bfe, #4d9fff);
+      animation: progressSlide 1.1s ease-in-out infinite;
+    }
+    @keyframes progressSlide {
+      0% { left: -40%; }
+      100% { left: 100%; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .progress-bar { animation: none; left: 0; width: 100%; opacity: 0.5; }
+    }
   </style>
 </head>
 <body>
@@ -88,17 +146,15 @@
   <p class="sub" data-i18n="settings.autoSave"></p>
 
   <main class="colgrid">
-    <section>
-      <h2 data-i18n="settings.language"></h2>
+    <section class="g-close">
+      <h2 data-i18n="settings.close"></h2>
       <div class="optrow">
-        <label><input name="locale" type="radio" value="system" /><span data-i18n="settings.locale.system"></span></label>
-        <label><input name="locale" type="radio" value="zh" /><span>中文</span></label>
-        <label><input name="locale" type="radio" value="en" /><span>English</span></label>
+        <label><input name="closeAction" type="radio" value="tray" /><span data-i18n="settings.close.tray"></span></label>
+        <label><input name="closeAction" type="radio" value="quit" /><span data-i18n="settings.close.quit"></span></label>
       </div>
-      <span class="hint" data-i18n="settings.language.hint"></span>
     </section>
 
-    <section>
+    <section class="g-datadir">
       <h2 data-i18n="settings.dataDir"></h2>
       <div class="stack">
         <label>
@@ -118,28 +174,7 @@
       </div>
     </section>
 
-    <section>
-      <h2 data-i18n="settings.close"></h2>
-      <div class="optrow">
-        <label><input name="closeAction" type="radio" value="tray" /><span data-i18n="settings.close.tray"></span></label>
-        <label><input name="closeAction" type="radio" value="quit" /><span data-i18n="settings.close.quit"></span></label>
-      </div>
-    </section>
-
-    <section>
-      <h2 data-i18n="settings.session"></h2>
-      <div class="stack">
-        <label>
-          <input id="autoRestore" type="checkbox" />
-          <span>
-            <span data-i18n="settings.autoRestore"></span><br />
-            <span class="hint" style="margin:0;" data-i18n="settings.autoRestore.hint"></span>
-          </span>
-        </label>
-      </div>
-    </section>
-
-    <section>
+    <section class="g-engine">
       <h2 data-i18n="settings.engineUpdate"></h2>
       <div class="sub" style="margin-bottom:6px;" data-i18n="settings.engineUpdate.sub"></div>
       <div class="optrow">
@@ -171,16 +206,23 @@
       </div>
     </section>
 
-    <section>
+    <section class="g-plugins">
       <h2 data-i18n="settings.plugins"></h2>
       <div class="sub" style="margin-bottom:6px;" data-i18n="settings.plugins.sub"></div>
       <div id="pluginList"></div>
+      <div id="pluginProgress" hidden>
+        <span class="progress-track"><span class="progress-bar"></span></span>
+        <span id="pluginProgressText">…</span>
+      </div>
       <div style="display:flex;align-items:center;gap:10px;margin-top:4px;flex-wrap:wrap;">
         <button id="btnSyncPlugins" type="button" class="dsh-btn">
           <span data-i18n="settings.plugins.sync"></span>
         </button>
         <button id="btnRestartEngine" type="button" class="dsh-btn">
           <span data-i18n="settings.plugins.restart"></span>
+        </button>
+        <button id="btnReloadPage" type="button" class="dsh-btn attn" hidden>
+          <span data-i18n="settings.plugins.reloadPage"></span>
         </button>
         <span id="pluginMsg" style="font-size:12px;opacity:0.85;"></span>
       </div>
@@ -198,9 +240,6 @@
       zh: {
         "settings.title": "设置",
         "settings.autoSave": "DSH GUI — 修改后自动保存",
-        "settings.language": "语言",
-        "settings.locale.system": "跟随系统（默认）",
-        "settings.language.hint": "界面语言会同时应用到 Harness 页面（内嵌引擎界面）",
         "settings.dataDir": "数据目录",
         "settings.home.system": "跟随系统 ~/.dsh（默认）",
         "settings.home.app": "应用目录（设置 / 会话 / 工作区记录随应用携带）",
@@ -208,9 +247,6 @@
         "settings.close": "关闭窗口",
         "settings.close.tray": "隐藏到托盘（默认，从托盘恢复）",
         "settings.close.quit": "直接退出（关闭窗口即退出，托盘一并移除）",
-        "settings.session": "会话",
-        "settings.autoRestore": "启动后自动回到最近一次对话（关闭后每次启动从空白/新会话开始）",
-        "settings.autoRestore.hint": "记录你最后打开/使用的会话，重启 DeepSeek Harness 后自动切回",
         "settings.engineUpdate": "引擎（dsh）更新",
         "settings.engineUpdate.sub": "由 DSH GUI 管理引擎的自动更新：更新策略 / 版本通道 / 自动检查。检查频率固定为 30 分钟，发现新版后按策略静默安装、询问或仅提示。",
         "settings.update.policy": "更新策略",
@@ -224,13 +260,26 @@
         "settings.update.autoCheck": "自动检查引擎更新",
         "settings.update.autoCheck.hint": "启动时与运行中每 30 分钟检查一次；关闭后不查询 registry，直接用本地引擎",
         "settings.update.checkNow": "立即检查引擎更新",
-        "settings.plugins": "第三方插件（启动时自动安装）",
-        "settings.plugins.sub": "勾选后，DSH GUI 每次启动会用引擎自带的 `dsh plugin` 把这些社区插件安装并挂载到 Harness Web（npm 包需可访问网络）。运行中的引擎需重启后才加载新插件；卸载请用 dsh-market 或 `dsh plugin remove` 手动处理。第三方插件等于以你的权限运行第三方代码——默认关闭，勾选前请自行审阅源码。",
-        "settings.plugins.sync": "立即安装已勾选项",
-        "settings.plugins.syncing": "安装中…",
+        "settings.plugins": "第三方插件（勾选即安装，取消即卸载）",
+        "settings.plugins.sub": "两个独立状态，都会与 Harness 页面的插件市场实时互相同步：①「安装」勾选框镜像安装/卸载（装了即勾、没装即不勾）；②「启用」开关镜像加载/禁用（关掉不卸载，只是引擎不加载它）。市场里禁用/启用/卸载会立刻反映到这里，这里改动也会写回同一份 profile（补丁层 + 市场状态），两侧显示与设置始终一致。安装需重启引擎后挂载；启用/禁用由引擎热重载，通常无需重启。第三方插件等于以你的权限运行第三方代码——默认关闭，勾选前请自行审阅源码。",
+        "settings.plugins.installLabel": "安装",
+        "settings.plugins.enableLabel": "启用",
+        "settings.plugins.enabled": "已启用",
+        "settings.plugins.disabled": "已禁用",
+        "settings.plugins.disabledByMarket": "已禁用（插件市场）",
+        "settings.plugins.disabledByPatch": "已禁用（profile 补丁层）",
+        "settings.plugins.driftHint": "插件市场已禁用，但禁用尚未写入 profile 补丁层——引擎重启后由「修复 / 重试」补写，届时才真正不加载。",
+        "settings.plugins.enableDone": "已启用 —— 引擎热重载后生效。",
+        "settings.plugins.disableDone": "已禁用 —— 引擎热重载后生效（文件仍保留）。",
+        "settings.plugins.needRefresh": "已生效（引擎侧）。插件页面部分需刷新 Harness 页面才同步 —— 点「刷新页面」。",
+        "settings.plugins.needRestart": "已生效（已写入 profile）。需重启引擎后完全生效。",
+        "settings.plugins.reloadPage": "刷新页面",
+        "settings.plugins.notInstalledEnable": "未安装，无法启用",
+        "settings.plugins.sync": "修复 / 重试",
+        "settings.plugins.syncing": "修复中…",
         "settings.plugins.installed": "已安装 v{0}",
-        "settings.plugins.notInstalled": "未安装（下次启动自动装）",
-        "settings.plugins.done": "完成：新装 {0}，失败 {1}",
+        "settings.plugins.notInstalled": "未安装（勾选即装）",
+        "settings.plugins.done": "完成：新装 {0}，卸载 {1}，失败 {2}",
         "settings.plugins.failed": "失败：{0}",
         "settings.plugins.restart": "重启引擎使生效",
         "settings.plugins.restarting": "正在重启引擎…",
@@ -240,9 +289,6 @@
       en: {
         "settings.title": "Settings",
         "settings.autoSave": "DSH GUI — changes are saved automatically",
-        "settings.language": "Language",
-        "settings.locale.system": "Follow system (default)",
-        "settings.language.hint": "Also applies to the Harness page (engine and in-page features)",
         "settings.dataDir": "Data Folder",
         "settings.home.system": "Follow system ~/.dsh (default)",
         "settings.home.app": "App folder (settings / sessions / workspace records travel with the app)",
@@ -250,9 +296,6 @@
         "settings.close": "Close Window",
         "settings.close.tray": "Hide to tray (default; restore from tray)",
         "settings.close.quit": "Quit (closing the window quits and removes the tray)",
-        "settings.session": "Session",
-        "settings.autoRestore": "Reopen the last conversation on launch (off = always start blank/new)",
-        "settings.autoRestore.hint": "Remembers the conversation you last opened so it is reopened after restarting DeepSeek Harness",
         "settings.engineUpdate": "Engine (dsh) Updates",
         "settings.engineUpdate.sub": "DSH GUI manages automatic engine (dsh) updates: update policy / version channel / auto-check. The check interval is fixed at 30 minutes; on a new version it installs silently, asks, or notifies per the policy.",
         "settings.update.policy": "Update Policy",
@@ -266,13 +309,26 @@
         "settings.update.autoCheck": "Auto-check for engine updates",
         "settings.update.autoCheck.hint": "Check at launch and every 30 minutes while running; when off, the registry is not queried and the local engine is used",
         "settings.update.checkNow": "Check Engine Update Now",
-        "settings.plugins": "Third-party plugins (auto-install on launch)",
-        "settings.plugins.sub": "When checked, DSH GUI runs the engine's own `dsh plugin` on every launch to install & mount these community plugins into Harness Web (needs registry access). A running engine must be restarted to load newly installed plugins; uninstall manually via dsh-market or `dsh plugin remove`. Third-party plugins run third-party code with your permissions — off by default; review their source before enabling.",
-        "settings.plugins.sync": "Install checked now",
-        "settings.plugins.syncing": "Installing…",
+        "settings.plugins": "Third-party plugins (check = install, uncheck = uninstall)",
+        "settings.plugins.sub": "Two independent states, both kept in sync with the Harness plugin market in real time: (1) the “install” checkbox mirrors install/uninstall (installed → checked); (2) the “enable” toggle mirrors loaded/disabled (turning it off does not uninstall — the engine simply does not load it). Disabling/enabling/uninstalling in the market shows up here immediately, and changes made here are written back to the same profile (patch layer + market state), so both surfaces always agree. Installing needs an engine restart to mount; enabling/disabling hot-reloads and usually needs no restart. Third-party plugins run third-party code with your permissions — off by default; review their source before enabling.",
+        "settings.plugins.installLabel": "Install",
+        "settings.plugins.enableLabel": "Enabled",
+        "settings.plugins.enabled": "Enabled",
+        "settings.plugins.disabled": "Disabled",
+        "settings.plugins.disabledByMarket": "Disabled (plugin market)",
+        "settings.plugins.disabledByPatch": "Disabled (profile patch layer)",
+        "settings.plugins.driftHint": "Disabled in the plugin market, but the disable has not been written to the profile patch layer yet — “Repair / retry” writes it, and only then does the engine really stop loading it.",
+        "settings.plugins.enableDone": "Enabled — applies after the engine hot-reloads.",
+        "settings.plugins.disableDone": "Disabled — applies after the engine hot-reloads (files kept).",
+        "settings.plugins.needRefresh": "Applied on the engine side. The plugin's page half needs a Harness page reload to match — click “Reload page”.",
+        "settings.plugins.needRestart": "Written to the profile. Restart the engine for it to fully apply.",
+        "settings.plugins.reloadPage": "Reload page",
+        "settings.plugins.notInstalledEnable": "Not installed — cannot enable",
+        "settings.plugins.sync": "Repair / retry",
+        "settings.plugins.syncing": "Repairing…",
         "settings.plugins.installed": "Installed v{0}",
-        "settings.plugins.notInstalled": "Not installed (auto-installs on next launch)",
-        "settings.plugins.done": "Done: {0} installed, {1} failed",
+        "settings.plugins.notInstalled": "Not installed (check to install)",
+        "settings.plugins.done": "Done: {0} installed, {1} removed, {2} failed",
         "settings.plugins.failed": "Failed: {0}",
         "settings.plugins.restart": "Restart engine to apply",
         "settings.plugins.restarting": "Restarting engine…",
@@ -303,26 +359,63 @@
       if (st && st.installed) return (uiLang === "en" ? "Installed v" : "已安装 v") + (st.version || "?");
       return uiLang === "en" ? "Not installed" : "未安装";
     }
+    /** 启用/禁用状态文案（含来源：市场 / profile 补丁层）。 */
+    function enabledText(st) {
+      if (!st || !st.installed) return uiLang === "en" ? "Not installed — cannot enable" : "未安装，无法启用";
+      if (st.enabled) return uiLang === "en" ? "Enabled" : "已启用";
+      if (st.disabledBy === "patch")
+        return uiLang === "en" ? "Disabled (profile patch layer)" : "已禁用（profile 补丁层）";
+      return uiLang === "en" ? "Disabled (plugin market)" : "已禁用（插件市场）";
+    }
+    // 两个独立状态，各自镜像各自的真实状态、互不持久化“期望”集合：
+    //   - 安装勾选框：装了即勾、没装即不勾 → 勾选立即安装 / 取消立即卸载；
+    //   - 启用开关：启用即开、禁用即关 → 开启恢复加载 / 关闭只是不加载（不卸载）。
+    // 两者都来自同一份 profile（bundles + 补丁层 + 市场 state.json），因此市场
+    // 那边的改动会经 watch 广播回来重绘，这里改的也会写回同一份文件。
+    // busy 期间（安装/卸载/启用/禁用/修复进行中）所有勾选框与操作按钮一并禁用，
+    // 避免两个 pnpm 同时改同一个 profile 造成卡顿/锁冲突。
     function renderPlugins(s) {
       const box = document.getElementById("pluginList");
       if (!box) return;
       const catalog = Array.isArray(s.pluginCatalog) ? s.pluginCatalog : [];
-      const enabled = Array.isArray(s.autoPlugins) ? new Set(s.autoPlugins) : new Set();
+      const status = s.pluginStatus || {};
+      const busy = window.__pluginBusy === true;
       box.innerHTML = catalog
         .map((entry) => {
           const title = uiLang === "en" ? entry.en : entry.zh;
           const desc = uiLang === "en" ? entry.enDesc : entry.zhDesc;
           const blocked = entry.engineOk === false;
           const engineHint = blocked ? (uiLang === "en" ? entry.enEngine : entry.zhEngine) : "";
+          const st = status[entry.id];
+          const installed = Boolean(st && st.installed);
+          const enabled = !st || st.enabled !== false;
           const state = blocked
             ? uiLang === "en"
               ? "Engine-incompatible — not available"
               : "与当前引擎不兼容，不可用"
             : stateText(entry.id, s);
+          // 市场已禁用、但补丁层还没落下 → 引擎仍会加载它（两端不一致）。
+          const drift = Boolean(st && st.installed && st.marketDisabled && !st.patchDisabled);
+          // 启用开关：只在已安装时出现（没装就无所谓启用）。
+          // 注意必须放在安装 <label> **外面**：HTML 里 label 会把它内部第一个
+          // 可标注控件当成自己的目标，把启用勾选框嵌进去会让「点启用」顺带切换
+          // 安装勾选框（= 意外卸载）。所以启用开关是 .plg-row 的兄弟节点。
+          const enableRow = installed
+            ? '<label class="plg-enable-label" style="display:inline-flex;gap:5px;align-items:center;margin:2px 0 0 24px;cursor:' +
+              (busy ? "not-allowed" : "pointer") +
+              ';">' +
+              '<input type="checkbox" class="plg-enable" data-id="' + esc(entry.id) + '" ' + (enabled ? "checked" : "") +
+              (busy ? " disabled" : "") +
+              ' style="accent-color:#4d9fff;" />' +
+              '<span class="hint" style="margin:0;">' +
+              esc(uiLang === "en" ? "Enabled" : "启用") +
+              "</span></label>"
+            : "";
           return (
-            '<label class="plg" style="display:flex;gap:7px;align-items:flex-start;margin:3px 0;cursor:' + (blocked ? "not-allowed" : "pointer") + ';">' +
-            '<input type="checkbox" class="plg-check" data-id="' + esc(entry.id) + '" ' + (enabled.has(entry.id) ? "checked" : "") +
-            (blocked ? " disabled" : "") +
+            '<div class="plg-row" style="margin:5px 0;padding-bottom:4px;">' +
+            '<label class="plg" style="display:flex;gap:7px;align-items:flex-start;cursor:' + (blocked ? "not-allowed" : "pointer") + ';">' +
+            '<input type="checkbox" class="plg-check" data-id="' + esc(entry.id) + '" ' + (installed ? "checked" : "") +
+            (blocked || busy ? " disabled" : "") +
             ' style="margin-top:3px;accent-color:#4d6bfe;" />' +
             "<span>" +
             '<span class="plg-title">' + esc(title) + " — <code style=\"opacity:.7\">" + esc(entry.pkg) + "</code></span><br/>" +
@@ -330,23 +423,84 @@
             (blocked && engineHint
               ? '<span class="hint" style="margin:0;display:block;color:#e8806b;">⚠ ' + esc(engineHint) + "</span>"
               : "") +
-            '<span class="plg-state hint" style="margin:0;display:block;color:' + (blocked ? "#e8806b" : "#4d9fff") + ';">' + esc(state) + "</span>" +
-            "</span></label>"
+            '<span class="plg-state hint" style="margin:0;display:block;color:' + (blocked ? "#e8806b" : "#4d9fff") + ';">' +
+            esc(state) +
+            (installed
+              ? ' · <span class="plg-enable-state" style="color:' + (enabled ? "#3fb950" : "#e8806b") + ';">' +
+                esc(enabledText(st)) +
+                "</span>"
+              : "") +
+            "</span>" +
+            (drift
+              ? '<span class="hint" style="margin:0;display:block;color:#e8b96b;">⚠ ' +
+                esc(
+                  uiLang === "en"
+                    ? "Disabled in the plugin market, but the disable has not been written to the profile patch layer yet — “Repair / retry” writes it, and only then does the engine really stop loading it."
+                    : "插件市场已禁用，但禁用尚未写入 profile 补丁层——引擎重启后由「修复 / 重试」补写，届时才真正不加载。",
+                ) +
+                "</span>"
+              : "") +
+            "</span></label>" +
+            enableRow +
+            "</div>"
           );
         })
         .join("");
     }
 
+    // ---- 安装/卸载/修复 进度条 ----
+    function progressEl() {
+      return document.getElementById("pluginProgress");
+    }
+    function progressTextEl() {
+      return document.getElementById("pluginProgressText");
+    }
+    /** 主进程逐阶段日志 → 友好文案；不认识的原始行保持上一次文案不覆盖。 */
+    function friendlyProgress(text) {
+      const t = String(text || "");
+      if (/installing\s|dsh plugin --profile web add|plugin install failed/.test(t))
+        return uiLang === "en" ? "Installing…" : "正在安装…";
+      if (/removing\s|dsh plugin --profile web remove|plugin removed:/.test(t))
+        return uiLang === "en" ? "Uninstalling…" : "正在卸载…";
+      if (/install pnpm/.test(t)) return uiLang === "en" ? "Preparing pnpm…" : "正在准备 pnpm 环境…";
+      if (/stage/i.test(t)) return uiLang === "en" ? "Preparing local bundle…" : "正在准备本地捆绑…";
+      return null;
+    }
+    /** busy 锁：一次只允许一个插件操作；进行中显示进度条并禁用全部操作。 */
+    function setPluginBusy(busy, headerText) {
+      window.__pluginBusy = Boolean(busy);
+      const prog = progressEl();
+      if (prog) {
+        prog.hidden = !window.__pluginBusy;
+        if (headerText) progressTextEl().textContent = headerText;
+      }
+      const list = document.getElementById("pluginList");
+      const syncBtn = document.getElementById("btnSyncPlugins");
+      const restartBtn = document.getElementById("btnRestartEngine");
+      const reloadBtn = document.getElementById("btnReloadPage");
+      if (window.__pluginBusy) {
+        if (list) list.querySelectorAll(".plg-check, .plg-enable").forEach((b) => { b.disabled = true; });
+        if (syncBtn) { window.__syncWasDisabled = syncBtn.disabled; syncBtn.disabled = true; }
+        if (restartBtn) { window.__restartWasDisabled = restartBtn.disabled; restartBtn.disabled = true; }
+        if (reloadBtn) { window.__reloadWasDisabled = reloadBtn.disabled; reloadBtn.disabled = true; }
+      } else {
+        // 恢复各按钮进入 busy 前的可用状态（勾选框由 paint 按新状态重绘）。
+        if (syncBtn) syncBtn.disabled = window.__syncWasDisabled === true;
+        if (restartBtn) restartBtn.disabled = window.__restartWasDisabled === true;
+        if (reloadBtn) reloadBtn.disabled = window.__reloadWasDisabled === true;
+      }
+    }
+
     function paint(s) {
       if (s.uiLang === "zh" || s.uiLang === "en") uiLang = s.uiLang;
       applyTexts();
-      document.querySelectorAll('input[name="locale"]').forEach((el) => { el.checked = el.value === s.locale; });
-      document.getElementById("autoRestore").checked = s.autoRestoreLastSession !== false;
       document.querySelectorAll('input[name="homeMode"]').forEach((el) => { el.checked = el.value === s.dshHomeMode; });
       document.querySelectorAll('input[name="closeAction"]').forEach((el) => { el.checked = el.value === s.closeAction; });
       document.querySelectorAll('input[name="updatePolicy"]').forEach((el) => { el.checked = el.value === s.updatePolicy; });
       document.querySelectorAll('input[name="updateChannel"]').forEach((el) => { el.checked = el.value === s.updateChannel; });
       document.getElementById("updateAutoCheck").checked = s.updateCheckEnabled !== false;
+      window.__lastPayload = s;
+      window.__lastCatalog = Array.isArray(s.pluginCatalog) ? s.pluginCatalog : [];
       renderPlugins(s);
       const cur = document.getElementById("curEngine");
       const eng = s.installedEngine;
@@ -368,6 +522,17 @@
 
     api.onChanged(paint);
 
+    // 主进程逐阶段推送安装/卸载进度（微调正在进行的文案）。
+    api.onPluginProgress((p) => {
+      const friendly = friendlyProgress(p && p.text);
+      if (friendly) progressTextEl().textContent = friendly;
+    });
+
+    // 引擎页面/外观设置变更时实时切换本窗口深浅色（主进程 app:theme 推送）。
+    api.onTheme((theme) => {
+      if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+    });
+
     // 内容高度自适应：语言切换 / 数据到达 / 主题变化时通知主进程重设窗口高度。
     let rafPending = false;
     function reportHeight() {
@@ -388,12 +553,6 @@
 
     api.get().then((s) => {
       paint(s);
-      document.querySelectorAll('input[name="locale"]').forEach((el) => {
-        el.addEventListener("change", () => el.checked && api.set({ locale: el.value }).then(() => flashSaved()));
-      });
-      document.getElementById("autoRestore").addEventListener("change", (e) => {
-        api.set({ autoRestoreLastSession: e.target.checked }).then(() => flashSaved());
-      });
       document.querySelectorAll('input[name="homeMode"]').forEach((el) => {
         el.addEventListener("change", () => el.checked && api.set({ dshHomeMode: el.value }).then(() => flashSaved()));
       });
@@ -410,22 +569,147 @@
         api.set({ updateCheckEnabled: e.target.checked }).then(() => flashSaved());
       });
 
-      // 第三方插件：勾选 = 持久化选择（下次启动自动装）；按钮 = 立即同步安装。
+      // 第三方插件：勾选框 = 安装状态的实时镜像。勾选 → 立即安装，取消 → 立即
+      // 卸载（引擎与插件市场都改同一个 profiles/web/package.json，状态变化会经
+      // broadcast 推回来重绘，因此这里不用再写回任何“期望”集合）。
+      //
+      // 安装/卸载有真实耗时（pnpm/引擎子进程），期间：显示进度条 + 禁用全部
+      // 勾选框与操作按钮（busy 锁），完成后恢复——避免无反馈的“卡窗口”观感，
+      // 也避免两个操作并发改同一个 profile。
       const pluginList = document.getElementById("pluginList");
       const pluginMsg = document.getElementById("pluginMsg");
-      const collectChecked = () =>
-        Array.from(pluginList.querySelectorAll(".plg-check:checked")).map((el) => el.getAttribute("data-id"));
-      pluginList.addEventListener("change", (e) => {
-        if (!e.target || !e.target.classList.contains("plg-check")) return;
-        api.set({ autoPlugins: collectChecked() }).then(() => flashSaved());
+      const pluginLabel = (id) => {
+        const entry = (window.__lastCatalog || []).find((c) => c.id === id);
+        return entry ? (uiLang === "en" ? entry.en : entry.zh) : id;
+      };
+      pluginList.addEventListener("change", async (e) => {
+        if (!e.target) return;
+        // ---- 启用 / 禁用开关（不卸载，只切换引擎是否加载）----
+        if (e.target.classList.contains("plg-enable")) {
+          const id = e.target.getAttribute("data-id");
+          const wantEnabled = e.target.checked;
+          const label = pluginLabel(id);
+          setPluginBusy(
+            true,
+            (wantEnabled ? (uiLang === "en" ? "Enabling " : "正在启用 ") : (uiLang === "en" ? "Disabling " : "正在禁用 ")) +
+              label +
+              "…",
+          );
+          pluginMsg.textContent = "";
+          try {
+            const res = await api.setPluginEnabled(id, wantEnabled);
+            const fresh = await api.get().catch(() => null);
+            if (fresh) paint(fresh);
+            if (res && res.ok) {
+              // 与市场开关一致的语义：引擎侧已在线生效；带客户端半体的插件还需要
+              // 刷新 Harness 页面，页面里已加载的那半才会消失/出现（市场也是返回
+              // refresh 并提示「刷新后生效」）。需要重启时则提示重启。
+              const reloadBtn = document.getElementById("btnReloadPage");
+              if (res.refresh) {
+                pluginMsg.textContent = uiLang === "en"
+                  ? "Applied on the engine side. The plugin's page half needs a Harness page reload to match — click “Reload page”."
+                  : "已生效（引擎侧）。插件页面部分需刷新 Harness 页面才同步 —— 点「刷新页面」。";
+                if (reloadBtn) reloadBtn.hidden = false;
+              } else {
+                pluginMsg.textContent = wantEnabled
+                  ? (uiLang === "en" ? "Enabled." : "已启用。")
+                  : (uiLang === "en" ? "Disabled." : "已禁用。");
+                if (reloadBtn) reloadBtn.hidden = true;
+              }
+              if (res.restart) {
+                pluginMsg.textContent = uiLang === "en"
+                  ? "Written to the profile. Restart the engine for it to fully apply."
+                  : "已写入 profile。需重启引擎后完全生效。";
+                const btnRestart = document.getElementById("btnRestartEngine");
+                if (btnRestart && !btnRestart.disabled) btnRestart.classList.add("attn");
+              }
+            } else {
+              pluginMsg.textContent =
+                (uiLang === "en" ? "Failed: " : "失败：") + String((res && res.error) || "?");
+            }
+          } catch (error) {
+            pluginMsg.textContent = (uiLang === "en" ? "Failed: " : "失败：") + String((error && error.message) || error);
+            const fresh = await api.get().catch(() => null);
+            if (fresh) paint(fresh);
+          } finally {
+            setPluginBusy(false);
+            const freshFinal = await api.get().catch(() => window.__lastPayload || null);
+            if (freshFinal) paint(freshFinal);
+          }
+          return;
+        }
+        // ---- 安装 / 卸载勾选框 ----
+        if (!e.target.classList.contains("plg-check")) return;
+        const id = e.target.getAttribute("data-id");
+        const wantChecked = e.target.checked;
+        const label = pluginLabel(id);
+        const header =
+          (wantChecked
+            ? (uiLang === "en" ? "Installing " : "正在安装 ")
+            : (uiLang === "en" ? "Uninstalling " : "正在卸载 ")) + label + "…";
+        setPluginBusy(true, header);
+        pluginMsg.textContent = "";
+        try {
+          const res = wantChecked ? await api.installPlugin(id) : await api.uninstallPlugin(id);
+          const fresh = await api.get();
+          paint(fresh);
+          if (res && res.ok) {
+            pluginMsg.textContent = wantChecked
+              ? (uiLang === "en" ? "Installed — restart engine to apply." : "已安装 —— 重启引擎后生效。")
+              : (uiLang === "en" ? "Uninstalled." : "已卸载。");
+            const btnRestart = document.getElementById("btnRestartEngine");
+            if (wantChecked && btnRestart && !btnRestart.disabled) btnRestart.classList.add("attn");
+          } else if (res && res.skipped) {
+            pluginMsg.textContent =
+              (uiLang === "en" ? "Engine-incompatible — not installed." : "与当前引擎不兼容，未安装。");
+          } else {
+            pluginMsg.textContent =
+              (uiLang === "en" ? "Failed: " : "失败：") + String((res && res.error) || "?");
+          }
+        } catch (error) {
+          pluginMsg.textContent = (uiLang === "en" ? "Failed: " : "失败：") + String((error && error.message) || error);
+          const fresh = await api.get().catch(() => null);
+          if (fresh) paint(fresh);
+        } finally {
+          // 恢复交互：解锁全部勾选框与操作按钮（按新状态重绘），隐藏进度条。
+          setPluginBusy(false);
+          const freshFinal = await api.get().catch(() => window.__lastPayload || null);
+          if (freshFinal) paint(freshFinal);
+        }
       });
       const btnSyncPlugins = document.getElementById("btnSyncPlugins");
       const syncLabel = btnSyncPlugins.querySelector("span");
       const btnRestartEngine = document.getElementById("btnRestartEngine");
       const restartLabel = btnRestartEngine.querySelector("span");
+      // 「刷新页面」：与市场开关的 refresh 信号对应——引擎侧已经切换完成，但页面里
+      // 已加载的客户端半体要重新加载页面才与之一致。
+      const btnReloadPage = document.getElementById("btnReloadPage");
+      if (btnReloadPage) {
+        btnReloadPage.addEventListener("click", async () => {
+          btnReloadPage.disabled = true;
+          pluginMsg.textContent = uiLang === "en" ? "Reloading…" : "正在刷新…";
+          try {
+            const res = await api.reloadEngineWindow();
+            if (res && res.ok === false) {
+              pluginMsg.textContent =
+                (uiLang === "en" ? "Reload unavailable: " : "刷新不可用：") + String(res.error || "?");
+              btnReloadPage.disabled = false;
+              return;
+            }
+            btnReloadPage.hidden = true;
+            pluginMsg.textContent = uiLang === "en" ? "Page reloaded." : "页面已刷新。";
+          } catch (error) {
+            pluginMsg.textContent =
+              (uiLang === "en" ? "Failed: " : "失败：") + String((error && error.message) || error);
+          } finally {
+            btnReloadPage.disabled = false;
+          }
+        });
+      }
       btnRestartEngine.addEventListener("click", async () => {
         if (btnRestartEngine.disabled) return;
         btnRestartEngine.disabled = true;
+        btnRestartEngine.classList.remove("attn");
         const orig = restartLabel.textContent;
         restartLabel.textContent = uiLang === "en" ? "Restarting engine…" : "正在重启引擎…";
         pluginMsg.textContent = "";
@@ -453,8 +737,10 @@
         if (btnSyncPlugins.disabled) return;
         btnSyncPlugins.disabled = true;
         const orig = syncLabel.textContent;
-        syncLabel.textContent = uiLang === "en" ? "Installing…" : "安装中…";
+        syncLabel.textContent = uiLang === "en" ? "Repairing…" : "修复中…";
         pluginMsg.textContent = "";
+        btnRestartEngine.classList.remove("attn");
+        setPluginBusy(true, uiLang === "en" ? "Repairing plugins…" : "正在修复插件…");
         try {
           const res = await api.syncPlugins();
           const fresh = await api.get();
@@ -463,27 +749,38 @@
           const okN = (res && Array.isArray(res.installed) ? res.installed.length : 0) || 0;
           const remN = (res && Array.isArray(res.removed) ? res.removed.length : 0) || 0;
           const skipN = (res && Array.isArray(res.skipped) ? res.skipped.length : 0) || 0;
-          if (failN > 0) {
-            const first = Array.isArray(res.errors) ? res.errors[0] : "";
-            pluginMsg.textContent = (uiLang === "en" ? "Failed: " : "失败：") + String(first || "");
-          } else {
-            const parts = [];
-            if (okN > 0) {
-              parts.push(
-                uiLang === "en" ? okN + " installed — restart engine to apply" : "新装 " + okN + "，重启引擎生效",
-              );
-            }
-            if (remN > 0) {
-              parts.push(uiLang === "en" ? remN + " removed (engine-incompatible)" : "移除 " + remN + " 个引擎不兼容插件");
-            }
-            if (skipN > 0) {
-              parts.push(uiLang === "en" ? skipN + " skipped (engine-incompatible)" : "跳过 " + skipN + " 个引擎不兼容插件");
-            }
-            pluginMsg.textContent = parts.length > 0 ? parts.join("；") : uiLang === "en" ? "Up to date" : "已是最新";
+          // 安装/捆绑更新真的发生才提示重启引擎；否则明确告知无需重启。
+          const changed = Boolean(res && res.changed) || okN + remN > 0;
+          const msg = [];
+          if (okN > 0) msg.push(uiLang === "en" ? okN + " installed" : "新装 " + okN);
+          if (remN > 0) msg.push(uiLang === "en" ? remN + " uninstalled" : "卸载 " + remN);
+          if (skipN > 0) msg.push(uiLang === "en" ? skipN + " skipped (engine-incompatible)" : "跳过 " + skipN + " 个引擎不兼容项");
+          if (failN > 0) msg.push(uiLang === "en" ? failN + " failed" : "失败 " + failN);
+          const head =
+            msg.length > 0
+              ? (uiLang === "en" ? "Done: " : "完成：") + msg.join(uiLang === "en" ? ", " : "，")
+              : uiLang === "en"
+                ? "Everything is in sync"
+                : "插件状态一致";
+          const tail = changed
+            ? uiLang === "en"
+              ? " — restart the engine to apply."
+              : " —— 需重启引擎才能生效。"
+            : uiLang === "en"
+              ? " — no restart needed."
+              : " —— 无需重启引擎。";
+          pluginMsg.textContent = head + tail;
+          if (failN > 0 && Array.isArray(res.errors) && res.errors[0]) {
+            pluginMsg.textContent += (uiLang === "en" ? " First error: " : " 首个错误：") + String(res.errors[0]);
           }
+          // 有实际变动：重启按钮若在可用状态就提示用户点它。
+          if (changed && !btnRestartEngine.disabled) btnRestartEngine.classList.add("attn");
         } catch (error) {
           pluginMsg.textContent = (uiLang === "en" ? "Failed: " : "失败：") + String((error && error.message) || error);
         } finally {
+          setPluginBusy(false);
+          const freshFinal = await api.get().catch(() => window.__lastPayload || null);
+          if (freshFinal) paint(freshFinal);
           syncLabel.textContent = orig;
           btnSyncPlugins.disabled = false;
         }

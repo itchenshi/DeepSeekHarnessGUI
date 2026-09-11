@@ -11,7 +11,17 @@ contextBridge.exposeInMainWorld("dshSettings", {
   get: () => ipcRenderer.invoke("settings:get"),
   set: (patch) => ipcRenderer.invoke("settings:set", patch),
   checkUpdate: () => ipcRenderer.invoke("settings:update-check"),
-  // 立即安装设置中已勾选的第三方插件（启动时也会自动执行）。
+  // 勾选框 = 安装状态实时镜像：勾选→立即安装，取消→立即卸载（不再持久化勾选状态）。
+  installPlugin: (id) => ipcRenderer.invoke("plugins:install", id),
+  uninstallPlugin: (id) => ipcRenderer.invoke("plugins:remove", id),
+  // 启用/禁用开关 = 加载状态实时镜像。走的是插件市场自己的开关接口
+  //（POST /dsh-market/toggle），因此在线生效时机、保护规则、restart/refresh
+  // 信号都与市场页面上的那个开关一致。
+  setPluginEnabled: (id, enabled) => ipcRenderer.invoke("plugins:set-enabled", id, enabled),
+  // 禁用/启用带客户端半体的插件后，页面里已加载的那半需要刷新页面才与引擎一致
+  //（市场的开关同样返回 refresh 并提示「刷新后生效」）。
+  reloadEngineWindow: () => ipcRenderer.invoke("dsh-gui:reload-engine-window"),
+  // 重试/修复按钮：以“当前已安装集合”为目标再对账（补拉捆绑插件更新，绝不卸载）。
   syncPlugins: () => ipcRenderer.invoke("settings:plugin-sync"),
   // 请求 DSH GUI 重启托管的 dsh 引擎（插件安装/挂载后需重启生效）。
   restartEngine: () => ipcRenderer.invoke("settings:restart-engine"),
@@ -19,5 +29,13 @@ contextBridge.exposeInMainWorld("dshSettings", {
   autoSize: (height) => ipcRenderer.invoke("settings:autosize", height),
   onChanged: (callback) => {
     ipcRenderer.on("settings:changed", (_event, settings) => callback(settings));
+  },
+  // 安装/卸载/修复逐阶段进度（主进程推送；渲染层驱动进度条文案）。
+  onPluginProgress: (callback) => {
+    ipcRenderer.on("plugins:progress", (_event, progress) => callback(progress));
+  },
+  // 主进程在引擎页面主题变化（或外观设置变更）时推送，实时切换本窗口深浅色。
+  onTheme: (callback) => {
+    ipcRenderer.on("app:theme", (_event, theme) => callback(theme));
   },
 });

@@ -32,6 +32,11 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const LAST_MARKER = "/* dsh-gui-last-session-patch v3 */";
+/**
+ * Engines this fallback patch is known to apply to cleanly. NOTE: this is now
+ * only a *hint* — the plugin `dsh-gui-last-session` is the primary
+ * implementation and does not need this patch at all. See below.
+ */
 const SUPPORTED_ENGINE = "0.1.2-rc.1";
 const LAST_PKG = "@deepseek-ai/dsh-client-ui-conversation";
 const LAST_CLIENT_REL = path.join("node_modules", LAST_PKG, "lib", "client.js");
@@ -174,24 +179,39 @@ function applyLastSession(engineDir, log = () => {}) {
     log("last-session patch: package not found, skipped");
     return { ok: false, reason: "client package missing" };
   }
-  if (versionOf(engineDir, LAST_PKG_REL) !== SUPPORTED_ENGINE) {
-    const installed = versionOf(engineDir, LAST_PKG_REL);
-    log(`last-session patch: unsupported engine version (${installed}), skipped`);
-    return { ok: false, reason: "unsupported engine" };
-  }
-  const text = fs.readFileSync(clientFile, "utf8");
-  const lines = text.split(/\r?\n/);
-  const { blocks, markers } = injectedState(lines);
-  // 幂等快路径：恰好一份 v3 补丁块 + 一个 v3 标记 → 无需改动。
-  if (blocks === 1 && markers === 1 && text.includes(LAST_MARKER)) {
-    return { ok: true, already: true };
-  }
-
   // 锚点：ui-conversation apply(ctx) 的开头（sessions 服务已解包）。
   const anchor = [
     "function apply(ctx) {",
     "const sessions = ctx.sessions;",
   ];
+
+  const text = fs.readFileSync(clientFile, "utf8");
+  const lines = text.split(/\r?\n/);
+  const { blocks, markers } = injectedState(lines);
+
+  // 版本告警（不再是硬门槛）：这个补丁是 `dsh-gui-last-session` 插件的**兜底**，
+  // 插件才是主实现。过去这里用 `!== SUPPORTED_ENGINE` 直接放弃，导致每次引擎
+  // 更新都静默失效——这正是改用插件的原因。现在版本不匹配只记一条日志，真正
+  // 的判断交给下面的锚点探测：锚点在就照常打（引擎多半兼容），锚点不在就放弃。
+  const installedVersion = versionOf(engineDir, LAST_PKG_REL);
+  if (installedVersion !== SUPPORTED_ENGINE) {
+    log(
+      `last-session patch: engine version ${installedVersion} differs from the verified ${SUPPORTED_ENGINE}; ` +
+        "probing anchors instead of skipping",
+    );
+  }
+
+  // 幂等快路径：恰好一份 v3 补丁块 + 一个 v3 标记 → 无需改动。
+  if (blocks === 1 && markers === 1 && text.includes(LAST_MARKER)) {
+    return { ok: true, already: true };
+  }
+
+  // 锚点探测：找不到说明引擎布局已变，放弃（绝不破坏引擎文件）。
+  if (findBlock(lines, anchor) === -1) {
+    log("last-session patch: apply(ctx) anchor missing on this engine build, engine file left unchanged");
+    return { ok: false, reason: "apply(ctx) anchor missing" };
+  }
+
   const block = [
     "",
     "// dsh-gui: 记住“最近一次对话”并在重启后自动打开（原 dsh-undo 页内逻辑，现由引擎补丁承载）。",

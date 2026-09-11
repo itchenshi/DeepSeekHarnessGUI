@@ -29,7 +29,9 @@ npmRebuild: false
 afterPack: scripts/after-pack.js
 
 win:
-  icon: build/icon.png
+  # 用 make-icons 自产的混合帧 icon.ico（BMP 帧兼容 Maye 等老解析器，
+  # PNG 256 帧给资源管理器）；让 electron-builder 原样打进 exe / 安装包。
+  icon: build/icon.ico
   target:
     - target: nsis
       arch:

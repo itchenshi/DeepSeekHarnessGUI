@@ -36,15 +36,28 @@ DSH GUI 是 [DeepSeek Harness](https://www.deepseek.com/harness/)（开源 Agent
 
 三平台仓库互为镜像；安装包以 [GitHub Releases](https://github.com/itchenshi/DeepSeekHarnessGUI/releases) 为准。
 
+## 🆕 v0.3.0 亮点
+
+- **📊 用量插件加入 DeepSeek 余额**：`dsh-opencode-go-usage` → **`dsh-model-usage`（模型用量与余量）**。
+  用 OpenCode Go 模型时显示套餐用量（滚动 / 周 / 月），用 DeepSeek 模型时显示**账户余额**（总 / 赠送 / 充值），
+  两段各自独立取数、缺哪个密钥只影响哪一半。
+- **✅ 插件的「安装」与「启用」拆成两个状态**：勾选框管安装/卸载，「启用」开关管加载/禁用；
+  两者都与 Harness 页面的插件市场**双向实时同步**（「启用」开关走市场自己的接口，在线生效）。
+- **🎨 Windows 图标修复**：白底圆角 + 品牌蓝字形；16~128 用 BMP 帧、256 用 PNG 帧 ——
+  Maye 等老式启动器能显示、Windows「更改图标」不再报「文件不包含图标」。
+- **⚡ 打包提速**：Node 与 Electron 发行包本地缓存复用，重复打包 0 下载、断网也能构建。
+
+完整改动见 [CHANGELOG.md](CHANGELOG.md) 与 [RELEASE-NOTES-v0.3.0.md](RELEASE-NOTES-v0.3.0.md)。
+
 ## 📸 界面预览
 
 | 主窗口 | 设置窗口 |
 |---|---|
-| ![主窗口](marketing/v0.2.0/主窗口.png) | ![设置窗口](marketing/v0.2.0/设置.png) |
+| ![主窗口](marketing/v0.3.0/主窗口.png) | ![设置窗口](marketing/v0.3.0/设置.png) |
 
 | 设置窗口（第三方插件） | 侧边栏 |
 |---|---|
-| ![DSH设置](marketing/v0.2.0/DSH设置.png) | ![DSH侧边栏](marketing/v0.2.0/DSH侧边栏.png) |
+| ![DSH设置](marketing/v0.3.0/DSH设置.png) | ![DSH侧边栏](marketing/v0.3.0/DSH侧边栏.png) |
 
 ---
 
@@ -77,12 +90,51 @@ DSH GUI 是 [DeepSeek Harness](https://www.deepseek.com/harness/)（开源 Agent
 
 ### 🔌 第三方插件管理
 
-- **设置窗口「第三方插件」区**：勾选后，DSH GUI 每次启动会用引擎自带的
-  `dsh plugin` 把这些社区插件安装并挂载到 Harness Web（npm 包需可访问网络）。
-- **内置候选目录（经核实的社区插件）**：插件市场（dsh-market）、增强侧栏
-  （dsh-better-sidebar）、智能体团队（dsh-agent-teams）、OpenCode 会话头
-  （dsh-opencode-go-session，加固版）。
-- **卸载**：请用 dsh-market 或 `dsh plugin remove` 手动处理，GUI 不做自动卸载。
+插件有**两个正交状态**，设置窗口两个控件各管一个，且都与 Harness 页面的插件市场实时互相同步：
+
+- **①「安装」勾选框 = 安装/卸载状态实时镜像**。装了即勾、没装即不勾，
+  勾选**立即安装**、取消**立即卸载**（与插件市场同一套 `dsh plugin` 机制，从
+  profile 移除、保留本地文件），不再持久化勾选状态。
+- **②「启用」开关 = 加载/禁用状态实时镜像**（v0.3.0 新增）。关掉**不卸载**，
+  只是让引擎不加载它（文件与登记都保留）；开启即恢复加载。
+  **走的是插件市场自己的开关接口**（`POST <引擎>/dsh-market/toggle`，与市场页面上
+  那个开关完全同一条路径），所以在线生效时机、保护规则、`restart` / `refresh`
+  信号都与市场一致：
+  - 引擎侧**立即生效**（市场用 loader 句柄在线切换，不需要重启）；
+  - 带**客户端半体**的插件（如模型用量与余量）禁用后，页面里已加载的那半不会
+    自己消失——市场为此返回 `refresh: true` 并提示「刷新后生效」，设置窗口同样会
+    出现「**刷新页面**」按钮，点它就与引擎实际组合对齐；
+  - 市场拒绝的情况原样上报（宿主基础设施禁止开关、市场自身不可关、未安装），
+    不会绕过它的保护去写文件；
+  - 市场不可用时（未安装 / 引擎没跑 / 老版本没有该路由）自动回退到直接写 profile
+    补丁层 `cordis.patch.yml` 的 `- id: <rowId>` + `disabled: true|false` 行并同步
+    市场 `.dsh-market/state.json`——在 `patchReload: live` 的 web profile 上同样由
+    引擎在线重组合（实测 ~0.7s 生效），只是缺少 `restart`/`refresh` 信号。
+- **与插件市场实时联动**：设置窗口同时 watch `profiles/web/package.json`、
+  `cordis.patch.yml` 与 `.dsh-market/state.json`（市场开关改的就是这三处）。
+  任一变化都会重算状态指纹并广播给设置窗口，两个控件按真实状态重绘；市场里
+  禁用/启用后设置窗口立即显示为「已禁用（插件市场）／已启用」。
+- **状态不一致会自动对账**：若市场已禁用某插件、但禁用行还没写进 profile 补丁层
+  （此时引擎其实仍会加载它），启动维护与「修复 / 重试」会把它补写成真正的禁用，
+  设置窗口同时显示一行提示说明原因。
+- **启动维护对账**：只针对已安装的目录插件——捆绑插件随包更新时重装；已装但对
+  当前引擎不兼容的目录插件（会让 profile 启动崩溃）先移除；不动用户手动装的
+  额外 bundle。
+- **「修复 / 重试」按钮**：以当前已安装集合为目标再对账（补拉捆绑插件更新），
+  只增不删，可作安装失败后的重试；同时对齐启用/禁用状态。
+- **内置候选目录（经核实的社区插件）**：插件市场（dsh-market）、最近会话恢复
+  （dsh-gui-last-session）、模型用量与余量（dsh-model-usage）、OpenCode 会话头
+  （dsh-opencode-go-session，加固版）。设置窗口展示顺序即此顺序。
+- **`dsh-model-usage`（模型用量与余量）**：在会话标题右侧显示**当前模型**的用量/余量，
+  按会话当前选中的模型路由分流（仅在使用对应模型时出现）：
+  - OpenCode Go 模型（`opencode-go` / `opencode`）→ 套餐用量（滚动 / 周 / 月 百分比 + 重置时间），
+    宿主侧经 `ctx.credentials` 取 `OPENCODE_GO_API_KEY` 调 `GET https://opencode.ai/zen/go/v1/usage`；
+  - DeepSeek 模型（路由 `deepseek-official`）→ **账户余额**（总 / 赠送 / 充值，`is_available:false` 显示
+    「余额不足」），取 `DEEPSEEK_API_KEY` 调 `GET https://api.deepseek.com/user/balance`。
+  两条上游都在宿主侧完成，密钥绝不下发浏览器；页内按 `ctx.modelDirectories` 的 `current.provider`
+  决定显示哪一段。**该插件原为 `dsh-opencode-go-usage`（只管 OpenCode Go），加入 DeepSeek 余额后更名**——
+  升级时 GUI 会自动摘除旧包并装上新版（连"已禁用"的选择一起搬过去），不会新旧两版同时加载。
+- **卸载**：设置窗口取消勾选、dsh-market 或 `dsh plugin remove` 均可（同一机制）。
 - **安全提示（设置页原文）**：第三方插件等于以你的权限运行第三方代码——
   默认关闭，勾选前请自行审阅源码。
 
@@ -97,18 +149,19 @@ DSH GUI 是 [DeepSeek Harness](https://www.deepseek.com/harness/)（开源 Agent
 
 ### 🌐 多语言与外观
 
-- **多语言界面**：设置窗口「语言」可选 跟随系统（默认）/ 中文 / English；
-  跟随系统时按操作系统语言解析。
-- **外观跟随 Harness**：启动时读取 `$DSH_HOME/settings.yaml` 的
-  `ui-theme.preference`（light / dark / system），按它设置窗口与各页面主题。
-- **语言双向同步**：设置会同时应用到 GUI（设置窗口/托盘菜单/对话框）与
-  Harness 页面，引擎侧经由 `settings.yaml` 的 `locale.preference` 热发布切换，
-  无需重启。
+- **语言在 Harness 页面里选，外壳跟着走**：设置窗口**没有**独立的语言/外观栏（v0.3.0 起移除，
+  统一到引擎侧）——在 Harness 页面的设置里改语言（跟随系统 / 中文 / English）或主题
+  （light / dark / system），DSH GUI 外壳（设置窗口、托盘菜单、对话框、窗口主题）**实时跟随**，无需重启。
+- **跟随系统时的解析顺序**：`locale: system`（默认）时优先跟随引擎设置文件
+  `$DSH_HOME/settings.yaml` 里的 `locale.preference`（即 Harness 页面用的那个），其次才按 Electron 系统语言解析。
+- **热发布**：主进程 watch `settings.yaml`，页面上改完立刻生效；GUI 自己写回的值因相等自动跳过，不会循环。
+- **主题一张皮**：`appearance: engine`（默认）时窗口主题跟 Harness 的 `ui-theme.preference` 一致，
+  不会出现页面深色、外壳浅色。
 
 ### 💬 会话体验
 
 - **启动后自动回到最近一次对话**：记录最后使用的会话，重启 DeepSeek Harness
-  后自动切回（可在 GUI 设置窗口关闭该行为）。
+  后自动切回（由内置插件 `dsh-gui-last-session` 实现，默认开启）。
 
 ### 🎛 设置与持久化
 
@@ -133,7 +186,10 @@ DSH GUI 是 [DeepSeek Harness](https://www.deepseek.com/harness/)（开源 Agent
 
 | 设置项 | 默认 | 说明 |
 |---|---|---|
-| 第三方插件自动安装 | **关闭** | 每次启动用引擎 `dsh plugin` 安装并挂载到 web profile（需联网；卸载走 dsh-market / `dsh plugin remove`） |
+| 安装勾选框 | **跟随实际状态** | 不持久化「期望」集合：装了即勾、没装即不勾；勾选立即安装、取消立即卸载 |
+| 启用开关 | **跟随实际状态** | 仅对已安装插件显示；关掉不卸载，只是引擎不加载它；与 Harness 插件市场双向实时同步 |
+
+> 旧版 `settings.json` 里的 `autoPlugins` 字段自 v0.3.0 起**废弃**（残留值不再参与任何逻辑）。
 
 ### 数据与桌面
 
@@ -143,11 +199,11 @@ DSH GUI 是 [DeepSeek Harness](https://www.deepseek.com/harness/)（开源 Agent
 | 关闭窗口 | **隐藏到托盘** | 另一选项为“直接退出”（关窗即退出，移除托盘） |
 | 自动回到最近对话 | **开** | 重启后自动切回上次使用的会话 |
 
-### 语言
+### 语言与外观
 
-| 设置项 | 默认 | 说明 |
-|---|---|---|
-| 语言 | **跟随系统** | 中文 / English / 跟随系统；同步应用到 GUI 与内嵌 Harness 页面 |
+> **不在 DSH GUI 设置窗口里改**：v0.3.0 起已移除「语言」「外观」两栏，统一在
+> **Harness 页面（引擎设置）** 修改，外壳实时跟随（见上文「多语言与外观」）。
+> 设置窗口只保留：关闭窗口行为、数据目录、引擎更新、第三方插件。
 
 > 设置持久化于 `<userData>/settings.json`，修改即保存；GUI 设置窗口可从菜单
 > `设置 → 打开设置窗口…`（模态）或托盘「设置」进入。
@@ -179,7 +235,8 @@ npm start          # 启动 DSH GUI
          └─ boot()
              ├─ 解析 Node：捆绑便携版 → $DSH_SHELL_NODE → 系统 PATH
              ├─ 需要时检查更新(npm registry) → 按策略安装/提示
-             ├─ 启动前：按设置自动安装已勾选的第三方插件（`dsh plugin`，幂等）
+             ├─ 启动前：对账已安装的目录插件（补拉捆绑插件更新；不改用户手动装的）
+             ├─ 清理已改名的旧插件（摘 bundle + dependencies，避免新旧两版同时加载）
              ├─ spawn node <engine>/lib/bin.js web --no-open --port 0
              ├─ 解析 stdout 的 `dsh web: <url>` → 内嵌加载
              └─ 退出：kill 进程树 + 销毁托盘
@@ -209,15 +266,22 @@ DeepSeek Harness 的全部用户数据都在 `$DSH_HOME`（默认 `~/.dsh`）下
 │  ├─ notice.html         # 持久更新角标
 │  └─ home-migrate.js     # 数据目录检测与迁移（纯 Node，可单测）
 ├─ plugins/               # 仓库内置的本地插件（打包进 app.asar）
+│  ├─ dsh-model-usage/           # 模型用量与余量（OpenCode Go 用量 + DeepSeek 余额）
+│  ├─ dsh-gui-last-session/      # 启动后回到最近一次对话
 │  └─ dsh-opencode-go-session/   # OpenCode 会话头（加固版，本地 file 安装）
 ├─ scripts/               # 构建与测试脚本
-│  ├─ make-icons.mjs      # 官网 favicon → 各尺寸图标
-│  ├─ bundle-node.mjs     # 便携 Node 下载/解包
+│  ├─ make-icons.mjs      # 官网 favicon → 各尺寸图标 + win 用的混合帧 icon.ico
+│  ├─ ico-info.cjs        # 检查任意 .ico 的帧构成与长度自洽性
+│  ├─ exe-icon-info.cjs   # 检查 exe 内嵌图标资源（RT_ICON / RT_GROUP_ICON）
+│  ├─ bundle-node.mjs     # 便携 Node 下载/解包（幂等 + 归档缓存）
+│  ├─ ensure-electron.mjs # electron 发行 zip 本地缓存（SHA-256 校验）
 │  ├─ fix-unpacked.mjs    # 改名 + 生成 zip
 │  ├─ after-pack.js       # electron-builder 钩子：完整拷贝捆绑 Node
-│  └─ smoke-close.ps1、smoke-modal.ps1   # Windows E2E 冒烟
-├─ marketing/            # 营销物料（按版本分目录 v0.1.0 / v0.2.0 / …）
-│  └─ v0.2.0/            # CSDN/知乎文章、推广文案包、B 站视频脚本
+│  ├─ push-all.ps1        # 推送分支+tags 到三平台
+│  ├─ publish-all.ps1     # 构建 + 三平台 Releases 发布
+│  └─ smoke-*.ps1         # Windows E2E 冒烟
+├─ marketing/            # 营销物料（按版本分目录 v0.1.0 / v0.2.0 / v0.3.0 / …）
+│  └─ v0.3.0/            # CSDN/知乎/掘金/少数派文章、推广文案包、B 站视频脚本
 ├─ resources/icons/       # 官网 favicon 源文件（svg/ico）
 ├─ electron-builder.yml   # 打包配置（win/mac/linux）
 └─ dist/                  # 构建产物（已 gitignore）
@@ -248,13 +312,26 @@ DeepSeek Harness 的全部用户数据都在 `$DSH_HOME`（默认 `~/.dsh`）下
 ### 打包
 
 ```sh
-npm run make-icons    # 渲染各尺寸图标（build/、src/）
-npm run bundle:node   # 下载当前平台便携 Node 到 resources/node
-npm run dist          # 合并构建 win + linux（注意平台限制，见下）
+npm run make-icons    # 渲染各尺寸图标（build/、src/；含 win 用的 build/icon.ico：
+                      #   白底+品牌蓝字形；16..128 是未压缩 BMP 帧，256 是 PNG 帧——
+                      #   BMP 帧兼容 Maye 等老解析器，256 必须用 PNG 否则
+                      #   Windows「更改图标」报「不包含图标」）
+npm run bundle:node   # 便携 Node 就位检查（幂等：版本/平台一致直接跳过；
+                      #   压缩包缓存于 resources/.node-cache/，删了 node 目录也零下载；
+                      #   加 --force 强制重新下载）
+npm run ensure:electron # electron 发行 zip 本地缓存（首次下载并 SHA-256 校验，
+                      #   之后 dist:win 直接喂给 electron-builder，零网络）
 npm run dist:win      # Windows → dist/DSH-GUI-WIN/ + .zip + NSIS 安装包 + 便携 zip
+                      #   （electron 走本地缓存 zip，不再每轮 Downloading）
+npm run dist          # 合并构建 win + linux（注意平台限制，见下）
 npm run dist:mac      # macOS   → dist/DSH-GUI-MAC/ + .zip + .dmg（需 macOS）
 npm run dist:linux    # Linux   → dist/DSH-GUI-LINUX/ + .zip + .AppImage
 ```
+
+> 改完图标记得**重新安装/复制构建产物**：Windows 资源管理器与 Maye 会缓存旧图标，
+> 重装或新建快捷方式后若仍显示旧的，重启资源管理器（或删
+> `%LocalAppData%\IconCache.db`）即可。可用 `node scripts/ico-info.cjs build/icon.ico`
+> 检查 .ico 的帧构成。
 
 - **程序目录命名**：electron-builder 的 `*-unpacked` 目录由
   `scripts/fix-unpacked.mjs` 改名为 `DSH-GUI-WIN` / `DSH-GUI-MAC` /
@@ -273,12 +350,21 @@ npm run dist:linux    # Linux   → dist/DSH-GUI-LINUX/ + .zip + .AppImage
 
 ```sh
 npm start                                   # 运行应用
-# 引擎补丁工具纯函数单测：
-node src/test/engine-patch.test.cjs
-# Windows 端到端（真实 WM_CLOSE 验证关闭/托盘/模态行为）：
+npm test                                    # 全部单测（含设置窗口内联 JS 语法/结构校验）
+npm run test:e2e                            # Windows 端到端（需先关闭正在运行的实例）
+# 分开跑：
+node src/test/engine-patch.test.cjs         # 引擎补丁工具纯函数单测
+node src/test/plugin-state.test.cjs         # 插件状态指纹（含启用/禁用维度）
+node src/test/plugin-enable.test.cjs        # 启用/禁用：补丁层读写、市场同步、BOM、占位符
+node src/test/settings-ui.test.cjs          # 设置项/主题映射
+node src/test/plugin-manager.test.cjs       # profile 自愈/清理
+node scripts/check-settings-html.cjs        # 设置窗口内联 JS 语法 + 插件行结构约束
+# Windows 端到端：
 powershell -File scripts/smoke-close.ps1 -Mode quit   # “直接退出”模式
 powershell -File scripts/smoke-close.ps1 -Mode tray   # “隐藏到托盘”模式
 powershell -File scripts/smoke-modal.ps1              # 模态设置窗
+powershell -File scripts/smoke-profile-watch.ps1      # 插件市场禁用 → 设置窗口实时联动
+powershell -File scripts/smoke-plugin-enable.ps1      # 启用/禁用 ↔ 补丁层 + 市场 state.json 双向同步
 ```
 
 ---
@@ -291,9 +377,10 @@ powershell -File scripts/smoke-modal.ps1              # 模态设置窗
   Linux/macOS（或 Docker/CI）构建，见「打包 → 平台限制」。
 - **数据目录切换后看不到原来的会话**：切换时若源目录有数据会询问是否移动；
   选“仅切换”时数据保留在原位置。
-- **切换语言后部分界面没变**：语言选择会实时重绘 GUI（设置窗口 / 托盘菜单）并写入引擎
-  `settings.yaml` 的 `locale.preference`；内嵌 Harness 页面会跟随引擎 locale 热发布
-  即时切换。若页面未立即刷新，稍等片刻或重启应用即可。
+- **切换语言后部分界面没变**：语言是在 **Harness 页面（引擎设置）** 里改的（v0.3.0 起
+  设置窗口不再提供语言栏）；改完写入引擎 `settings.yaml` 的 `locale.preference`，
+  外壳（设置窗口 / 托盘菜单 / 对话框）经文件 watch 实时跟随，内嵌 Harness 页面也会
+  热发布即时切换。若页面未立即刷新，稍等片刻或重启应用即可。
 - **想让配置/会话完全随应用目录走**：在设置中把数据目录切到“应用目录”，
   并确认迁移完成；备份/迁移/删除整包即可。
 - **与官方 CLI 的关系**：本壳只是启动器/外壳，运行的仍是官方

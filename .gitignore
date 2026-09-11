@@ -3,7 +3,10 @@ dist/
 out/
 build/icons/
 build/icon.png
+build/icon.ico
 resources/node/
+resources/.node-cache/
+resources/.electron-cache/
 *.log
 .DS_Store
 .idea/

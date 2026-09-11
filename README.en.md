@@ -34,15 +34,24 @@ The three repositories are mirrors of each other; installers are published on [G
 | Gitee (mirror) | https://gitee.com/itchenshi/DeepSeekHarnessGUI | `git clone https://gitee.com/itchenshi/DeepSeekHarnessGUI.git` |
 | GitCode (mirror) | https://gitcode.com/itchenshi/DeepSeekHarnessGUI | `git clone https://gitcode.com/itchenshi/DeepSeekHarnessGUI.git` |
 
+## 🆕 What's new in v0.3.0
+
+- **📊 The usage plugin now shows your DeepSeek balance**: `dsh-opencode-go-usage` → **`dsh-model-usage`**. OpenCode Go models show plan usage (rolling / weekly / monthly); DeepSeek models show the **account balance** (total / granted / topped-up). The two feeds are independent — a missing key only disables its own half.
+- **✅ "Install" and "Enable" are two separate states now**: the checkbox installs/uninstalls, the "Enabled" toggle loads/disables — and both stay in **two-way live sync** with the Harness plugin market (the toggle calls the market's own endpoint, so it applies live).
+- **🎨 Windows icon fixes**: white rounded square + brand-blue glyph; BMP frames for 16–128 plus a PNG frame for 256 — Maye and other old launchers render it, and Windows' "change icon" dialog no longer reports that the file contains no icons.
+- **⚡ Much faster packaging**: the Node and Electron release archives are cached locally, so repeat builds download nothing and even work offline.
+
+Full details: [CHANGELOG.md](CHANGELOG.md) and [RELEASE-NOTES-v0.3.0.md](RELEASE-NOTES-v0.3.0.md).
+
 ## 📸 Screenshots
 
 | Main window | Settings window |
 |---|---|
-| ![Main window](marketing/v0.2.0/主窗口.png) | ![Settings window](marketing/v0.2.0/设置.png) |
+| ![Main window](marketing/v0.3.0/主窗口.png) | ![Settings window](marketing/v0.3.0/设置.png) |
 
 | Settings (third-party plugins) | Sidebar |
 |---|---|
-| ![DSH Settings](marketing/v0.2.0/DSH设置.png) | ![DSH Sidebar](marketing/v0.2.0/DSH侧边栏.png) |
+| ![DSH Settings](marketing/v0.3.0/DSH设置.png) | ![DSH Sidebar](marketing/v0.3.0/DSH侧边栏.png) |
 
 ---
 
@@ -64,9 +73,25 @@ The three repositories are mirrors of each other; installers are published on [G
 
 ### 🔌 Third-party plugin management
 
-- **Settings window → Third-party plugins**: when checked, DSH GUI runs the engine's own `dsh plugin` on every launch to install & mount the community plugins into Harness Web (needs registry access).
-- **Curated catalog (verified community plugins)**: Plugin marketplace (dsh-market) · Better sidebar (dsh-better-sidebar) · Agent teams (dsh-agent-teams) · OpenCode session header (dsh-opencode-go-session, hardened).
-- **Uninstall**: handled manually via dsh-market or `dsh plugin remove`; the GUI never auto-uninstalls.
+A plugin has **two orthogonal states**. The settings window gives each its own control, and both stay in sync with the Harness plugin market in real time:
+
+- **① The "install" checkbox mirrors the real install state.** Installed → checked, not installed → unchecked; checking installs immediately, unchecking uninstalls (same `dsh plugin` mechanism the market uses — removed from the profile, local files kept). No checkbox state is persisted anymore.
+- **② The "Enabled" toggle mirrors the loaded/disabled state** (new in v0.3.0). Turning it off does **not** uninstall — the engine simply stops loading the plugin (files and registration kept); turning it back on restores loading.
+  It goes through **the plugin market's own switch endpoint** (`POST <engine>/dsh-market/toggle` — the exact same path the market page's switch uses), so live timing, protection rules and the `restart` / `refresh` signals all match the market:
+  - the engine side applies **immediately** (the market drives the loader handle live — no restart);
+  - for plugins with a **client half** (e.g. model usage & balance) the already-loaded page half does not disappear on its own — the market returns `refresh: true` and shows a "refresh to apply" hint for exactly that reason, and the settings window offers the same **"Reload page"** action to line the page up with the engine;
+  - market refusals are surfaced verbatim (host infrastructure is protected, the market cannot disable itself, plugin not installed) — we never bypass its protections by writing files;
+  - when the market is unavailable (not installed / engine not running / older version without the route) it falls back to writing the profile patch layer `cordis.patch.yml` (`- id: <rowId>` + `disabled: true|false` rows) plus the market's `.dsh-market/state.json`. On a `patchReload: live` web profile the engine still recomposes that live (measured ~0.7s), just without the `restart`/`refresh` signals.
+- **Live sync with the plugin market**: the settings window watches `profiles/web/package.json`, `cordis.patch.yml` and `.dsh-market/state.json` (exactly the three files the market's switch touches). Any change recomputes the state fingerprint and rebroadcasts it, and both controls are repainted from the real state — disabling/enabling in the market shows up here immediately as "Disabled (plugin market)" / "Enabled".
+- **Disagreements self-heal**: if the market disabled a plugin but the disable row never made it into the profile patch layer (in which case the engine is in fact still loading it), boot maintenance and "Repair / retry" write the real disable, and the settings window says why in the meantime.
+- **Boot maintenance** (installed catalog entries only): bundled plugins are reinstalled when their bundled code was updated; installed entries whose `engineRange` is incompatible with the current engine (these can crash the profile) are removed before spawn; user-installed extra bundles are never touched. Renamed/merged catalog entries are also migrated here: the old package is unregistered and its replacement installed, carrying the enabled/disabled choice over.
+- **"Repair / retry" button**: reconciles against the currently installed set (pulls bundled-plugin updates), additive only — safe to use as a retry after a failed install; it also aligns the enabled/disabled state and runs the same rename migration.
+- **Curated catalog (verified community plugins)**: Plugin marketplace (dsh-market) · Reopen last session (dsh-gui-last-session) · **Model usage & balance (dsh-model-usage)** · OpenCode session header (dsh-opencode-go-session, hardened). The settings order is exactly this order.
+- **`dsh-model-usage`** shows **the active model's** usage / balance right of the session title, split by the session's current model route (each half appears only for its own models):
+  - OpenCode Go models (`opencode-go` / `opencode`) → plan usage (rolling / weekly / monthly percentages + reset time). The host resolves `OPENCODE_GO_API_KEY` through `ctx.credentials` and calls `GET https://opencode.ai/zen/go/v1/usage`.
+  - DeepSeek models (route `deepseek-official`) → **account balance** (total / granted / topped-up; `is_available:false` renders as "insufficient"). The host resolves `DEEPSEEK_API_KEY` and calls `GET https://api.deepseek.com/user/balance`.
+  Both upstreams run in the host half, so no key ever reaches the browser; the page half only decides *which* section to show from `ctx.modelDirectories`' `current.provider`. **This plugin used to be `dsh-opencode-go-usage` (OpenCode Go only) and was renamed when DeepSeek balance was added** — on upgrade the GUI unregisters the old package and installs the new one (carrying the disabled choice across), so the two never load side by side.
+- **Uninstall**: uncheck in Settings, or use dsh-market / `dsh plugin remove` (all the same mechanism).
 - **Security note (from the settings page)**: third-party plugins run third-party code with your permissions — off by default; review their source before enabling.
 
 ### 🔐 Data, credentials & privacy
@@ -77,13 +102,14 @@ The three repositories are mirrors of each other; installers are published on [G
 
 ### 🌐 Language & appearance
 
-- **Multi-language UI**: settings → Language offers "follow system" (default) / 中文 / English; "follow system" resolves from the OS language.
-- **Theme follows Harness**: reads `ui-theme.preference` (light / dark / system) from `$DSH_HOME/settings.yaml` at startup and applies it to the window and every page.
-- **Two-way locale sync**: the choice applies to both the GUI (settings window / tray menu / dialogs) and the Harness pages, hot-switched via `locale.preference` in `settings.yaml` — no restart needed.
+- **Language is chosen on the Harness page; the shell follows**: there is **no** separate language/appearance section in the settings window (removed in v0.3.0 — it lives on the engine side). Change the language (follow system / 中文 / English) or theme (light / dark / system) in Harness's own settings and the DSH GUI shell — settings window, tray menu, dialogs, window theme — **follows immediately**, no restart.
+- **How "follow system" resolves**: with `locale: system` (the default), the engine's `locale.preference` in `$DSH_HOME/settings.yaml` (the one the Harness page uses) wins; only then does it fall back to Electron's OS language.
+- **Hot-published**: the main process watches `settings.yaml`, so a change on the page applies at once; values the GUI itself writes are skipped when equal, so there is no loop.
+- **One consistent skin**: with `appearance: engine` (the default) the window theme matches Harness's `ui-theme.preference` — never a dark page in a light shell.
 
 ### 💬 Session experience
 
-- **Reopen last conversation on launch**: the last-used session is remembered and reopened after restarting DeepSeek Harness (can be turned off in the GUI settings window).
+- **Reopen last conversation on launch**: the last-used session is remembered and reopened after restarting DeepSeek Harness (implemented by the bundled `dsh-gui-last-session` plugin, on by default).
 
 ### 🎛 Settings & persistence
 
@@ -107,7 +133,10 @@ The three repositories are mirrors of each other; installers are published on [G
 
 | Setting | Default | Description |
 |---|---|---|
-| Auto-install third-party plugins | **off** | each launch runs `dsh plugin` for the checked items (needs registry access; uninstall via dsh-market / `dsh plugin remove`) |
+| Install checkbox | **mirrors reality** | no persisted "desired" set: installed → checked, not installed → unchecked; checking installs immediately, unchecking uninstalls |
+| Enabled toggle | **mirrors reality** | shown for installed plugins only; turning it off does NOT uninstall — the engine just stops loading it; two-way live sync with the Harness plugin market |
+
+> The legacy `autoPlugins` field in `settings.json` is **retired** as of v0.3.0 (any leftover value no longer affects anything).
 
 ### Data & desktop
 
@@ -117,11 +146,9 @@ The three repositories are mirrors of each other; installers are published on [G
 | Close window | **hide to tray** | the other option is "quit directly" (close to quit, tray removed) |
 | Reopen last conversation | **on** | the last used session is reopened after restarting DeepSeek Harness |
 
-### Language
+### Language & appearance
 
-| Setting | Default | Description |
-|---|---|---|
-| Language | **follow system** | 中文 / English / follow system; applied to both the GUI and the embedded Harness page |
+> **Not in the DSH GUI settings window**: the "Language" and "Appearance" rows were removed in v0.3.0 and now live in **Harness's own settings page**; the shell follows (see "Language & appearance" above). The settings window keeps: close behaviour, data directory, engine updates, third-party plugins.
 
 > Settings persist to `<userData>/settings.json` and save on change; also reachable via menu `Settings → Open settings window…` (modal) or the tray "Settings" item.
 
@@ -149,7 +176,8 @@ startup
          └─ boot()
              ├─ resolve Node: bundled portable → $DSH_SHELL_NODE → system PATH
              ├─ check for updates when needed (npm registry) → install/prompt per policy
-             ├─ before launch: auto-install checked third-party plugins (`dsh plugin`, idempotent)
+             ├─ before launch: reconcile installed catalog plugins (pull bundled updates; never touch user-installed bundles)
+             ├─ clean up renamed legacy plugins (drop from bundles + dependencies so two versions never load at once)
              ├─ spawn node <engine>/lib/bin.js web --no-open --port 0
              ├─ parse `dsh web: <url>` from stdout → load embedded
              └─ exit: kill process tree + destroy tray
@@ -179,15 +207,22 @@ All DeepSeek Harness user data lives under `$DSH_HOME` (default `~/.dsh`):
 │  ├─ notice.html         # persistent update badge
 │  └─ home-migrate.js     # data-dir detection & migration (pure Node, unit-testable)
 ├─ plugins/               # repo-bundled local plugins (shipped inside app.asar)
+│  ├─ dsh-model-usage/           # model usage & balance (OpenCode Go usage + DeepSeek balance)
+│  ├─ dsh-gui-last-session/      # reopen the last conversation on launch
 │  └─ dsh-opencode-go-session/   # OpenCode session header (hardened, local install)
 ├─ scripts/               # build & test scripts
-│  ├─ make-icons.mjs      # official favicon → icons at all sizes
-│  ├─ bundle-node.mjs     # portable Node download/unpack
+│  ├─ make-icons.mjs      # official favicon → icons at all sizes + win hybrid icon.ico
+│  ├─ ico-info.cjs        # inspect any .ico's frames and length consistency
+│  ├─ exe-icon-info.cjs   # inspect an exe's embedded icon resources (RT_ICON / RT_GROUP_ICON)
+│  ├─ bundle-node.mjs     # portable Node download/unpack (idempotent + archive cache)
+│  ├─ ensure-electron.mjs # local Electron release zip cache (SHA-256 verified)
 │  ├─ fix-unpacked.mjs    # rename + generate zip
 │  ├─ after-pack.js       # electron-builder hook: ship the bundled Node in full
-│  └─ smoke-close.ps1、smoke-modal.ps1   # Windows E2E smoke tests
-├─ marketing/            # marketing assets (versioned dirs: v0.1.0 / v0.2.0 / …)
-│  └─ v0.2.0/            # CSDN/Zhihu articles, promo copy pack, Bilibili script
+│  ├─ push-all.ps1        # push branch + tags to the three platforms
+│  ├─ publish-all.ps1     # build + publish releases on the three platforms
+│  └─ smoke-*.ps1         # Windows E2E smoke tests
+├─ marketing/            # marketing assets (versioned dirs: v0.1.0 / v0.2.0 / v0.3.0 / …)
+│  └─ v0.3.0/            # CSDN/Zhihu/Juejin/Sspai articles, promo copy pack, Bilibili script
 ├─ resources/icons/       # official favicon sources (svg/ico)
 ├─ electron-builder.yml   # packaging config (win/mac/linux)
 └─ dist/                  # build output (gitignored)
@@ -218,13 +253,29 @@ All DeepSeek Harness user data lives under `$DSH_HOME` (default `~/.dsh`):
 ### Packaging
 
 ```sh
-npm run make-icons    # render icons at all sizes (build/, src/)
-npm run bundle:node   # download current-platform portable Node to resources/node
-npm run dist          # combined win + linux build (platform limits apply — see below)
+npm run make-icons    # render icons at all sizes (build/, src/; also emits
+                      #   build/icon.ico — white bg + brand-blue glyph; frames
+                      #   16..128 are uncompressed BMP, 256 is PNG — BMP frames are
+                      #   readable by old quick-launch tools, and 256 MUST be PNG
+                      #   or Windows' "change icon" dialog rejects the file)
+npm run bundle:node   # ensure portable Node is unpacked (idempotent: skips when
+                      #   version/platform already match; archives cached in
+                      #   resources/.node-cache/, so removing the dir still
+                      #   re-extracts without downloading; --force re-downloads)
+npm run ensure:electron # cache the Electron release zip locally (downloaded once
+                      #   and SHA-256 verified; dist:win then feeds it to
+                      #   electron-builder with zero network)
 npm run dist:win      # Windows → dist/DSH-GUI-WIN/ + .zip + NSIS installer + portable zip
+                      #   (Electron comes from the local cached zip — no "Downloading…" each run)
+npm run dist          # combined win + linux build (platform limits apply — see below)
 npm run dist:mac      # macOS   → dist/DSH-GUI-MAC/ + .zip + .dmg (requires macOS)
 npm run dist:linux    # Linux   → dist/DSH-GUI-LINUX/ + .zip + .AppImage
 ```
+
+> After changing the icon, **reinstall/replace the build output**: Explorer and Maye
+> cache old icons — if a stale one still shows, restart Explorer (or delete
+> `%LocalAppData%\IconCache.db`). `node scripts/ico-info.cjs build/icon.ico` prints
+> the .ico's frames.
 
 - **Directory naming**: electron-builder's `*-unpacked` dirs are renamed to `DSH-GUI-WIN` / `DSH-GUI-MAC` / `DSH-GUI-LINUX` by `scripts/fix-unpacked.mjs`, which also produces same-named **`.zip`** files (unzip = ready-to-run directory).
 - **Bundled Node**: downloaded per platform by `scripts/bundle-node.mjs` (default v26; the engine's session persistence needs Node ≥ 23's zstd API). `scripts/after-pack.js` copies it into the app in full before packaging (`extraResources` can't be used — it drops `node_modules`, leaving bundled Node without npm). If the bundled Node has no npm, `npm` falls back to the host Node's npm-cli automatically.
@@ -239,10 +290,13 @@ npm run dist:linux    # Linux   → dist/DSH-GUI-LINUX/ + .zip + .AppImage
 npm start                                   # run the app
 # Pure-function unit tests for the engine patch utility:
 node src/test/engine-patch.test.cjs
+# Plugin-state drift unit tests (settings window <-> plugin market sync):
+node src/test/plugin-state.test.cjs
 # Windows E2E (real WM_CLOSE validating close/tray/modal behavior):
 powershell -File scripts/smoke-close.ps1 -Mode quit   # "quit directly" mode
 powershell -File scripts/smoke-close.ps1 -Mode tray   # "hide to tray" mode
 powershell -File scripts/smoke-modal.ps1              # modal settings window
+powershell -File scripts/smoke-profile-watch.ps1      # market disable -> live settings sync
 ```
 
 ---
@@ -252,7 +306,7 @@ powershell -File scripts/smoke-modal.ps1              # modal settings window
 - **First launch is slow / the status page shows "Downloading and installing…"**: the DeepSeek Harness engine is being installed automatically; this only happens once.
 - **`npm run dist` fails on Windows with `mksquashfs ENOENT`**: AppImage can only be built on Linux/macOS (or Docker/CI) — see Packaging → Platform limits.
 - **Sessions disappear after switching the data directory**: when switching, you're asked whether to move existing data; choosing "switch only" keeps the data in place.
-- **Language changes don't fully apply**: the choice is applied live to the GUI and written to `locale.preference` in the engine's `settings.yaml`; the embedded Harness page hot-switches with it. If the page doesn't refresh immediately, wait a moment or restart the app.
+- **Language changes don't fully apply**: the language is chosen on the **Harness settings page** (the settings window no longer offers a language row as of v0.3.0). The choice is written to `locale.preference` in the engine's `settings.yaml`; the shell (settings window / tray menu / dialogs) follows via a file watch, and the embedded Harness page hot-switches with it. If the page doesn't refresh immediately, wait a moment or restart the app.
 - **Want config/sessions to live entirely with the app directory**: switch the data directory to "app directory" in settings and confirm the migration; then backup/migrate/delete the whole package at once.
 - **Relation to the official CLI**: this shell is only a launcher/wrapper — it runs the official `@deepseek-ai/dsh`; any Harness capability question should go to the [DeepSeek Harness docs](https://deepseek-harness.github.io/deepseek-harness/guide/quickstart).
 
