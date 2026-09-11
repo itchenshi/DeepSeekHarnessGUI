@@ -24,7 +24,7 @@
 |---|---|
 | **用量插件加入 DeepSeek 余额** | `dsh-opencode-go-usage` 更名为 **`dsh-model-usage`（模型用量与余量）**，按会话当前模型分流显示套餐用量或账户余额 |
 | **「安装」与「启用」拆成两个状态** | 勾选框管安装/卸载，新增「启用」开关管加载/禁用；两者都与 Harness 页面的插件市场**双向实时同步** |
-| **Windows 图标修复** | 白底圆角 + 品牌蓝字形；16~128 用 BMP 帧、256 用 PNG 帧 —— Maye 等老式启动器能显示，Windows「更改图标」不再报「文件不包含图标」 |
+| **Windows 图标更新** | 主图标改为白底圆角 + 品牌蓝字形，桌面与快捷方式上更醒目；`build/icon.ico` 由 `scripts/make-icons.mjs` 直接生成 |
 | **打包提速** | Node 与 Electron 发行包本地缓存复用，重复打包 0 下载，断网也能构建 |
 | **稳定性** | 坏掉的插件安装/卸载不再挡启动（profile 自愈 + 引擎干净重装），已被污染的老安装下次启动自动修复 |
 | **设置窗口精简** | 语言/主题统一在 Harness 页面里改，外壳实时跟随；移除冗余勾选项 |
@@ -112,14 +112,13 @@ v0.2.0 只有「安装」勾选框；v0.3.0 把**安装**和**启用**拆成两�
 
 引擎与 GUI 的更新分家：托盘「检查 DSH GUI 更新…」查的是 GitHub Releases，有新版本时打开下载页；引擎更新由 GUI 在后台按设置策略自动处理。此外，dsh 由 DSH GUI 作为子进程托管，页面/插件内建的「重启」无法重启它——需要重启使插件或引擎生效时，用设置窗口的「重启引擎使生效」、页面桥 `window.__dshGui.restartEngine()`，或直接重启 DSH GUI；引擎就绪后意外退出时 GUI 会自动重拉（连续 3 次仍失败则停止并提示）。
 
-### 5. Windows 图标修复（v0.3.0 重点）
+### 5. Windows 图标更新（v0.3.0）
 
-- **主图标改为「白色圆角方块 + 品牌蓝字形」**（官方 `#4D6BFE`，带极浅渐变与细描边），深浅壁纸下都醒目；
-- **修复 Maye 等老式快速启动工具读不到图标**：此前打包生成的 ICO 全是 PNG 压缩帧，旧解析器只认未压缩 BMP 帧，结果一片空白。现在直接生成 `build/icon.ico`：**16~128 用未压缩 BMP 帧、256 用 PNG 帧**，与官方 `electron.exe` 的嵌入方式一致；
-- **修复 Windows「更改图标」报「文件不包含图标」**：修正了 256 帧的格式要求与 BMP 帧的 AND 掩码长度，保证「图标头 / 载荷 / 组条目」三者自洽；
-- 附两个自查工具：`scripts/ico-info.cjs`（检查任意 `.ico` 的帧构成与长度自洽性）、`scripts/exe-icon-info.cjs`（检查 exe 内嵌的 `RT_ICON` / `RT_GROUP_ICON`）。
+- **主图标改为「白色圆角方块 + 品牌蓝字形」**（官方 `#4D6BFE`，带极浅渐变与细描边），深浅壁纸下都醒目，桌面与快捷方式上更容易认出来；
+- **图标改为直接生成**：`build/icon.ico` 由 `scripts/make-icons.mjs` 直接生成，不再让打包工具从 PNG 转换；
+- 附两个自查工具：`scripts/ico-info.cjs`（检查任意 `.ico` 的帧与长度）、`scripts/exe-icon-info.cjs`（检查 exe 内嵌的 `RT_ICON` / `RT_GROUP_ICON`）。
 
-> 提示：Windows 资源管理器与 Maye 会缓存旧图标。重装或新建快捷方式后仍显示旧图标，重启资源管理器（或删除 `%LocalAppData%\IconCache.db`）即可刷新缓存。
+> 提示：重装或新建快捷方式后如果仍显示旧图标，重启一次资源管理器（或删除 `%LocalAppData%\IconCache.db`）即可刷新图标缓存。
 
 ### 6. 坏安装 / 卸载不再挡启动
 
@@ -238,7 +237,7 @@ DeepSeek Harness 的全部用户数据都在 `$DSH_HOME`（默认 `~/.dsh`）下
 ## 八、打包与发布
 
 ```sh
-npm run make-icons      # 渲染各尺寸图标 + Windows 用的 build/icon.ico（BMP 16..128 + PNG 256）
+npm run make-icons      # 渲染各尺寸图标 + Windows 用的 build/icon.ico
 npm run bundle:node     # 便携 Node 就位检查（幂等；压缩包缓存于 resources/.node-cache/）
 npm run ensure:electron # electron 发行 zip 本地缓存（首次下载并 SHA-256 校验，之后零网络）
 npm run dist:win        # Windows → NSIS 安装包 + 便携 zip + DSH-GUI-WIN 目录 zip
@@ -272,7 +271,7 @@ A：v0.3.0 把「OpenCode Go 用量」更名为「模型用量与余量」。GUI
 
 **Q5：桌面或开始菜单图标还是旧的？**
 
-A：Windows 资源管理器与 Maye 会缓存图标。重启一次资源管理器（或删除 `%LocalAppData%\IconCache.db`）即可刷新；图标文件本身的帧构成可用 `node scripts/ico-info.cjs build/icon.ico` 自查。
+A：图标缓存由 Windows 资源管理器持有。重启一次资源管理器（或删除 `%LocalAppData%\IconCache.db`）即可刷新；图标文件本身可用 `node scripts/ico-info.cjs build/icon.ico` 自查（查看帧与长度）。
 
 **Q6：`npm run dist` 在 Windows 上报 `mksquashfs ENOENT`？**
 
@@ -284,7 +283,7 @@ A：本壳只是启动器 / 外壳，运行的仍是官方 `@deepseek-ai/dsh`；
 
 ## 总结
 
-v0.3.0 是一次「把细节磨平」的版本：插件的**安装**与**启用**终于成为两个各自独立、又与插件市场实时对齐的状态，扩展能力的入口变得可预期；用量面板从「只看 OpenCode Go 套餐」升级为「按当前模型看用量或余额」，两段数据各自独立、密钥不出宿主；Windows 图标问题被从帧构成层面修掉，Windows「更改图标」和 Maye 这类老工具都不再出问题；打包链路加上本地缓存后，贡献者的重复构建成本也降了下来。
+v0.3.0 是一次「把细节磨平」的版本：插件的**安装**与**启用**终于成为两个各自独立、又与插件市场实时对齐的状态，扩展能力的入口变得可预期；用量面板从「只看 OpenCode Go 套餐」升级为「按当前模型看用量或余额」，两段数据各自独立、密钥不出宿主；Windows 主图标也重画成白底圆角 + 品牌蓝字形，在桌面和快捷方式上更醒目；打包链路加上本地缓存后，贡献者的重复构建成本也降了下来。
 
 对终端用户来说，它仍然是一个免安装运行时、开箱即用的 Harness 桌面壳；对开发者来说，插件状态对账、profile 自愈、引擎原子重装这些实现细节，也都值得 clone 下来读一读。
 

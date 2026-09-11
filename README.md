@@ -43,8 +43,7 @@ DSH GUI 是 [DeepSeek Harness](https://www.deepseek.com/harness/)（开源 Agent
   两段各自独立取数、缺哪个密钥只影响哪一半。
 - **✅ 插件的「安装」与「启用」拆成两个状态**：勾选框管安装/卸载，「启用」开关管加载/禁用；
   两者都与 Harness 页面的插件市场**双向实时同步**（「启用」开关走市场自己的接口，在线生效）。
-- **🎨 Windows 图标修复**：白底圆角 + 品牌蓝字形；16~128 用 BMP 帧、256 用 PNG 帧 ——
-  Maye 等老式启动器能显示、Windows「更改图标」不再报「文件不包含图标」。
+- **🎨 应用图标改为白色底**：白色圆角方块 + 品牌蓝字形，桌面/快捷方式上更醒目。
 - **⚡ 打包提速**：Node 与 Electron 发行包本地缓存复用，重复打包 0 下载、断网也能构建。
 
 完整改动见 [CHANGELOG.md](CHANGELOG.md) 与 [RELEASE-NOTES-v0.3.0.md](RELEASE-NOTES-v0.3.0.md)。
@@ -312,10 +311,8 @@ DeepSeek Harness 的全部用户数据都在 `$DSH_HOME`（默认 `~/.dsh`）下
 ### 打包
 
 ```sh
-npm run make-icons    # 渲染各尺寸图标（build/、src/；含 win 用的 build/icon.ico：
-                      #   白底+品牌蓝字形；16..128 是未压缩 BMP 帧，256 是 PNG 帧——
-                      #   BMP 帧兼容 Maye 等老解析器，256 必须用 PNG 否则
-                      #   Windows「更改图标」报「不包含图标」）
+npm run make-icons    # 渲染各尺寸图标（build/、src/；生成 win 用的 build/icon.ico：
+                      #   白底 + 品牌蓝字形，多尺寸混合帧）
 npm run bundle:node   # 便携 Node 就位检查（幂等：版本/平台一致直接跳过；
                       #   压缩包缓存于 resources/.node-cache/，删了 node 目录也零下载；
                       #   加 --force 强制重新下载）
@@ -328,7 +325,7 @@ npm run dist:mac      # macOS   → dist/DSH-GUI-MAC/ + .zip + .dmg（需 macOS�
 npm run dist:linux    # Linux   → dist/DSH-GUI-LINUX/ + .zip + .AppImage
 ```
 
-> 改完图标记得**重新安装/复制构建产物**：Windows 资源管理器与 Maye 会缓存旧图标，
+> 改完图标记得**重新安装/复制构建产物**：Windows 资源管理器会缓存旧图标，
 > 重装或新建快捷方式后若仍显示旧的，重启资源管理器（或删
 > `%LocalAppData%\IconCache.db`）即可。可用 `node scripts/ico-info.cjs build/icon.ico`
 > 检查 .ico 的帧构成。

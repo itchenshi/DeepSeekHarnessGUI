@@ -12,7 +12,7 @@
 
 先说清楚这个壳是什么：DSH GUI 是 DeepSeek Harness（开源 Agent 框架 `@deepseek-ai/dsh`）的**非官方 Electron 桌面壳**。它启动时 `spawn` 引擎的 `dsh web --no-open --port 0`，从 stdout 里解析出那个带认证 token 的 loopback URL，再加载进内嵌窗口——**官方引擎一行没改**，壳只负责「怎么跑得舒服」。
 
-v0.2.0 把多语言、主题同步、插件目录补齐了。v0.3.0 这版则集中在四件事上：图标在 Windows 上终于到处都能显示、打包不再每轮重新下载 Node / Electron、插件的两个状态被拆开、用量插件从「只看 OpenCode Go」变成「看模型用量与余量」。
+v0.2.0 把多语言、主题同步、插件目录补齐了。v0.3.0 这版则集中在四件事上：Windows 图标换成白底圆角 + 品牌蓝字形、打包不再每轮重新下载 Node / Electron、插件的两个状态被拆开、用量插件从「只看 OpenCode Go」变成「看模型用量与余量」。
 
 ## 一、模型用量与余量：一次请求，两段互不拖累
 
@@ -63,17 +63,16 @@ v0.2.0 把多语言、主题同步、插件目录补齐了。v0.3.0 这版则集
 
 ![设置窗口：第三方插件](设置.png)
 
-## 三、Windows 图标：一个 `.ico` 里的三种格式约束
+## 三、Windows 图标：白底圆角 + 品牌蓝字形
 
-图标这事看着小，踩的坑很典型。electron-builder 此前从 PNG 转出的 ICO 全是 **PNG 压缩帧**（Vista+ 格式），而老解析器只认未压缩 BMP：Maye 这类 .NET Framework 快速启动工具调用 `ExtractAssociatedIcon`，读出来是一片空白。现在 `scripts/make-icons.mjs` 直接把官网 favicon 渲染成 `build/icon.ico`，帧格式按尺寸分工：
+图标这事看着小，但它是别人点开项目之前看到的第一眼。这一版主图标重画为**白色圆角方块 + 品牌蓝字形**（官方 `#4D6BFE`，带极浅渐变与细描边），摆在桌面、开始菜单、任务栏和快捷方式上都更容易认出来，深色浅色壁纸下都清楚。
 
-- **16 / 24 / 32 / 48 / 64 / 128 用未压缩 BMP 帧**——旧解析器只认这种；
-- **256 用 PNG 帧**——BMP 在 256 尺寸上不可靠，Windows「更改图标」对话框会直接拒绝整个文件、报「文件不包含图标」；
-- **BMP 帧的 AND 掩码必须用紧凑 1bpp 长度**——若按 `w*h`（32bpp 行距）生成，electron-builder 嵌入 exe 时会把它截断成 1bpp，DIB 头声明的 `biSizeImage` 与实际载荷长度就对不上，严格解析器照样拒收。源码 `.ico` 直接写 1bpp 掩码，保证「DIB 头 / 载荷 / 组条目」三者自洽。
+生成方式也换了：
 
-已在真实 exe 上验证：`PrivateExtractIcons` 的 16/24/32/48/64/128/256 全尺寸可用、`ExtractIconEx` 1 组、`SHGetFileInfo` 正常、`ExtractAssociatedIcon` 显示白底 + 品牌蓝。仓库里也留了两个自查工具：`node scripts/ico-info.cjs build/icon.ico` 检查任意 .ico 的帧构成与长度自洽性，`scripts/exe-icon-info.cjs` 检查 exe 内嵌的 `RT_ICON` / `RT_GROUP_ICON` 有无悬空条目。
+- **直接生成 `build/icon.ico`**——不再让打包工具从 PNG 转换，改由 `scripts/make-icons.mjs` 直接把官网 favicon 渲染成 `.ico`；
+- **两个自查工具**：`node scripts/ico-info.cjs build/icon.ico` 查看任意 `.ico` 的帧与长度，`scripts/exe-icon-info.cjs` 查看 exe 内嵌的 `RT_ICON` / `RT_GROUP_ICON`。
 
-> 改完图标记得重装或重建快捷方式：Windows 资源管理器与 Maye 会缓存旧图标；仍显示旧的，重启资源管理器或删掉 `%LocalAppData%\IconCache.db` 即可。
+> 改完图标记得重装或重建快捷方式：如果之后仍显示旧图标，重启资源管理器或删掉 `%LocalAppData%\IconCache.db` 刷新一下图标缓存即可。
 
 ## 四、打包提速：重复打包 0 下载，断网也能构建
 

@@ -1,13 +1,10 @@
 "use strict";
 /**
  * ico-info.cjs — 列出 ICO 文件的帧（尺寸/位深/编码），并校验 BMP 帧长度。
- * 用于验证打包出来的 .ico 是否满足兼容性：
- *  - BMP 帧（未压缩 32bpp）→ 老解析器（Maye / .NET Framework ExtractAssociatedIcon）能读；
- *  - PNG 帧（Vista+）→ 只有现代解析器能读。
+ *  - BMP 帧（未压缩 32bpp）与 PNG 帧（Vista+）会分别标注；
  *  - BMP 帧总长必须自洽：40 + w*h*4 + 掩码长度。electron-builder 嵌入 exe 时
  *    会把掩码统一成紧凑 1bpp（((w+31)>>5)*4*h 字节），所以源码 .ico 也直接用
- *    紧凑掩码，避免 exe 内 DIB 头部（biSizeImage）与实际载荷长度不一致——
- *    不一致会让 Windows「更改图标」对话框判定「不包含图标」。
+ *    紧凑掩码，保证 exe 内 DIB 头部（biSizeImage）与实际载荷长度一致。
  * 用法：node scripts/ico-info.cjs <file.ico>
  */
 const fs = require("fs");

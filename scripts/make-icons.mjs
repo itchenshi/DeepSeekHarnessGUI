@@ -3,25 +3,18 @@
  * make-icons.mjs — render the DeepSeek Harness favicon (official site SVG)
  * into every size the app and electron-builder need.
  *
- * 两个图标问题的修复历史：
+ * 图标历史：
  *
  * 1. 桌面/快捷方式看不到（无背景色）——旧主图标是透明底蓝色字形，浅色桌面下
  *    几乎不可见。现在主图标为**白色圆角方块 + 品牌蓝字形**（官方 #4D6BFE），
  *    深色/浅色壁纸上都醒目。
- * 2. Maye 等老式快速启动工具读不到图标——electron-builder 从 PNG 转出的
- *    ICO 全是 PNG 压缩帧（Vista+ 格式），旧解析器（如 .NET Framework 的
- *    ExtractAssociatedIcon）只认未压缩 BMP 帧，结果一片空白。现在直接在
- *    make-icons 阶段生成 **build/icon.ico**：16~128 用未压缩 BMP 帧、256 用
- *    PNG 帧，electron-builder 以 .ico 原样打进 exe / 安装包。
- * 3. Windows「更改图标」报「不包含图标」——两处根因：① 256 帧必须是 PNG
- *    （BMP 在 256 上不可靠）；② BMP 帧的 AND 掩码长度若按 w*h（32bpp 行距）
- *    生成，electron-builder 嵌入 exe 时会截断成紧凑 1bpp，造成 DIB 头声明的
- *    biSizeImage 与实际载荷不一致，严格解析器照样拒收。所以源码 .ico 直接用
- *    紧凑 1bpp 掩码，保持头/载荷/组条目三者一致。详见 renderBmpFrame 注释。
+ * 2. Windows 图标改为在 make-icons 阶段直接产出 **build/icon.ico**（不再让
+ *    electron-builder 从 PNG 自行转换），帧构成与官方 electron.exe 的嵌入方式
+ *    保持一致。详见下方 ICO_BMP_SIZES / renderBmpFrame 注释。
  *
  * Outputs:
  *   build/icon.png           1024x1024 (app icon source; mac/linux convert)
- *   build/icon.ico           16~128 BMP 帧 + 256 PNG 帧 (win exe / installer 用，见上)
+ *   build/icon.ico           多尺寸混合帧 (win exe / installer 用，见上)
  *   build/icons/<n>x<n>.png  16/32/48/64/128/256/512/1024 (linux)
  *   build/variants/icon-{white,black}.png  1024x1024 (可选的主题替代色字形)
  *   src/icon.png             256x256  (BrowserWindow icon, packaged)
@@ -43,13 +36,10 @@ const BUILD_ICONS_DIR = join(ROOT, "build", "icons");
 const BUILD_VARIANTS_DIR = join(ROOT, "build", "variants");
 const SIZES = [16, 32, 48, 64, 128, 256, 512, 1024];
 /**
- * ICO 帧构成（实测结论，别随意改）：
- *  - 16..128：**未压缩 BMP 帧** —— Maye 等老式快速启动工具（.NET Framework
- *    ExtractAssociatedIcon）只认 BMP 帧，PNG 帧会让它们显示空白；
- *  - 256：**必须是 PNG 帧** —— ICO 规范里 256×256 靠 ICONDIRENTRY 的宽高字节
- *    编码为 0，未压缩 BMP 在该尺寸上不可靠（Windows「更改图标」对话框会直接报
- *    「不包含图标」）。官方 electron.exe 同样是 16/32/48 BMP + 256 PNG，这里与
- *    它保持一致。
+ * ICO 帧构成：
+ *  - 16..128：未压缩 BMP 帧；
+ *  - 256：PNG 帧（ICO 规范里 256×256 靠 ICONDIRENTRY 的宽高字节编码为 0）。
+ * 官方 electron.exe 同样是 16/32/48 BMP + 256 PNG，这里与它保持一致。
  */
 const ICO_BMP_SIZES = [16, 24, 32, 48, 64, 128];
 const ICO_PNG_SIZE = 256;
@@ -99,7 +89,7 @@ async function renderPng(svgBuffer, size, outFile) {
   await sharp(svgBuffer, { density: 300 }).resize(size, size).png().toFile(outFile);
 }
 
-/** BMP 帧（未压缩 32bpp BGRA + 全 0 AND 掩码），老解析器/Maye 都能读。 */
+/** BMP 帧（未压缩 32bpp BGRA + 全 0 AND 掩码）。 */
 async function renderBmpFrame(svgBuffer, size) {
   const { data } = await sharp(svgBuffer, { density: 300 })
     .resize(size, size)
@@ -120,9 +110,9 @@ async function renderBmpFrame(svgBuffer, size) {
     }
   }
   // AND 掩码长度用**紧凑 1bpp 行距** ((size+31)>>5)*4*size：这是 electron-builder
-  // 的写入器强制采用的格式——实测它会把超长掩码截断（官方 electron.exe 用
-  // size*size 的掩码，但我们经 .ico 交给 electron-builder 时它只写紧凑长度），
-  // 所以这里直接生成紧凑长度，避免 exe 内的 DIB 与资源头不一致。
+  // 的写入器采用的格式（官方 electron.exe 用 size*size 的掩码，但我们经 .ico 交给
+  // electron-builder 时它只写紧凑长度），所以这里直接生成紧凑长度，
+  // 避免 exe 内的 DIB 与资源头不一致。
   const andRowBytes = ((size + 31) >> 5) * 4;
   const and = Buffer.alloc(andRowBytes * size); // 全 0 → 不透明遮罩
   const bmp = Buffer.alloc(40);
@@ -180,8 +170,7 @@ async function main() {
   await renderPng(appSvg, 1024, BUILD_ICON);
   console.log("->", BUILD_ICON);
 
-  // Windows：16..128 未压缩 BMP（Maye 等老工具可读）+ 256 PNG（规范要求，
-  // 也让资源管理器大图标更清晰、体积更小）。
+  // Windows：16..128 未压缩 BMP + 256 PNG（PNG 在大尺寸上体积更小）。
   const frames = [];
   for (const size of ICO_BMP_SIZES) {
     frames.push({ w: size, h: size, data: await renderBmpFrame(appSvg, size) });

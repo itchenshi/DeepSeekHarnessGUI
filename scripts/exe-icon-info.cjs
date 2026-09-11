@@ -7,8 +7,7 @@
  *   RT_GROUP_ICON (14) -- the ICONDIR/ICONDIRENTRY table that names them
  *
  * For each group it cross-checks that every ICONDIRENTRY points at a real
- * RT_ICON id, because the Windows "change icon" dialog rejects the whole file
- * when a group entry dangles.
+ * RT_ICON id (a dangling group entry is a broken resource table).
  *
  * Usage: node scripts/exe-icon-info.cjs <file.exe> [...more.exe]
  */
@@ -121,8 +120,7 @@ function describeIconPayload(buf, raw, size) {
   const biCompression = buf.readUInt32LE(raw + 16);
   const biSizeImage = buf.readUInt32LE(raw + 20);
   // 一致性：DIB 头声明的图像区（XOR+AND）必须等于实际载荷 - 40 字节头。
-  // electron-builder 若把超长掩码截断，biSizeImage 会与实际不符 → 严格解析器
-  // （如「更改图标」对话框）判「不包含图标」。
+  // 若掩码被截断，biSizeImage 就会与实际载荷长度对不上（资源表不自洽）。
   const claimed = 40 + biSizeImage;
   return {
     kind: "BMP",

@@ -2,7 +2,7 @@
 
 **发布日：2026-09-11** · 从 v0.2.0 累积的所有改动。
 
-> 一句话：**图标终于对了、打包快了一个数量级，第三方插件的「安装」和「启用」拆成了两个状态并全部与插件市场双向同步；用量插件加入 DeepSeek 余额并更名为「模型用量与余量」。**
+> 一句话：**打包显著提速，第三方插件的「安装」和「启用」拆成了两个状态并全部与插件市场双向同步；用量插件加入 DeepSeek 余额并更名为「模型用量与余量」；应用图标改为白色底。**
 
 ---
 
@@ -69,23 +69,14 @@
 - 插件目录为四项，展示顺序：**插件市场 dsh-market、最近会话恢复 dsh-gui-last-session、
   模型用量与余量 dsh-model-usage、OpenCode 会话头 dsh-opencode-go-session**。
 
-## 🎨 应用图标修复（Windows 上终于到处都能显示）
+## 🎨 应用图标改为白色底
 
 - **主图标改为「白色圆角方块 + 品牌蓝字形」**（官方 `#4D6BFE`，带极浅渐变与细描边）——
-  桌面/快捷方式不再“找不到图标”，深色/浅色壁纸都醒目。
-- **修复 Maye 等老式快速启动工具读不到图标**：electron-builder 此前从 PNG 转出的 ICO 全是
-  **PNG 压缩帧**（Vista+ 格式），旧解析器（.NET Framework `ExtractAssociatedIcon`）只认未压缩 BMP 帧，
-  结果一片空白。现在 `make-icons` 直接生成 `build/icon.ico`：**16..128 用未压缩 BMP 帧、256 用 PNG 帧**，
-  与官方 `electron.exe` 的嵌入方式一致。
-- **修复 Windows「更改图标」报「文件不包含图标」**：两处根因 ——
-  ① **256 帧必须是 PNG**（BMP 在 256 上不可靠，对话框会直接拒绝整个文件）；
-  ② BMP 帧的 AND 掩码长度若按 `w*h`（32bpp 行距）生成，electron-builder 嵌入 exe 时会截断成紧凑 1bpp，
-  造成 DIB 头声明的 `biSizeImage` 与实际载荷长度不一致，严格解析器照样拒收 —— 所以源码 `.ico` 直接用紧凑 1bpp 掩码，
-  保持「头 / 载荷 / 组条目」三者一致。
+  桌面/快捷方式上更醒目，深色/浅色壁纸都能看清。
+- `build/icon.ico` 由 `scripts/make-icons.mjs` 直接生成（不再依赖 electron-builder 从 PNG 转换），
+  帧构成与官方 `electron.exe` 的嵌入方式一致。
 - 新增两个可随时自查的工具：`scripts/ico-info.cjs`（检查任意 .ico 的帧构成与长度自洽性）、
   `scripts/exe-icon-info.cjs`（检查 exe 内嵌的 RT_ICON / RT_GROUP_ICON 是否一致、有无悬空条目）。
-- 已在真实 exe 上验证：`PrivateExtractIcons` 16/24/32/48/64/128/256 全尺寸可用、`ExtractIconEx` 1 组、
-  `SHGetFileInfo` 正常、`ExtractAssociatedIcon` 显示白底 + 品牌蓝。
 
 ## ⚡ 打包提速（不再每轮下载 Node / Electron）
 

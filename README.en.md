@@ -38,7 +38,7 @@ The three repositories are mirrors of each other; installers are published on [G
 
 - **📊 The usage plugin now shows your DeepSeek balance**: `dsh-opencode-go-usage` → **`dsh-model-usage`**. OpenCode Go models show plan usage (rolling / weekly / monthly); DeepSeek models show the **account balance** (total / granted / topped-up). The two feeds are independent — a missing key only disables its own half.
 - **✅ "Install" and "Enable" are two separate states now**: the checkbox installs/uninstalls, the "Enabled" toggle loads/disables — and both stay in **two-way live sync** with the Harness plugin market (the toggle calls the market's own endpoint, so it applies live).
-- **🎨 Windows icon fixes**: white rounded square + brand-blue glyph; BMP frames for 16–128 plus a PNG frame for 256 — Maye and other old launchers render it, and Windows' "change icon" dialog no longer reports that the file contains no icons.
+- **🎨 App icon now has a white background**: a white rounded square with the brand-blue glyph, so it stands out on the desktop and shortcuts.
 - **⚡ Much faster packaging**: the Node and Electron release archives are cached locally, so repeat builds download nothing and even work offline.
 
 Full details: [CHANGELOG.md](CHANGELOG.md) and [RELEASE-NOTES-v0.3.0.md](RELEASE-NOTES-v0.3.0.md).
@@ -254,10 +254,8 @@ All DeepSeek Harness user data lives under `$DSH_HOME` (default `~/.dsh`):
 
 ```sh
 npm run make-icons    # render icons at all sizes (build/, src/; also emits
-                      #   build/icon.ico — white bg + brand-blue glyph; frames
-                      #   16..128 are uncompressed BMP, 256 is PNG — BMP frames are
-                      #   readable by old quick-launch tools, and 256 MUST be PNG
-                      #   or Windows' "change icon" dialog rejects the file)
+                      #   build/icon.ico — white bg + brand-blue glyph,
+                      #   multi-size mixed frames)
 npm run bundle:node   # ensure portable Node is unpacked (idempotent: skips when
                       #   version/platform already match; archives cached in
                       #   resources/.node-cache/, so removing the dir still
@@ -272,8 +270,8 @@ npm run dist:mac      # macOS   → dist/DSH-GUI-MAC/ + .zip + .dmg (requires ma
 npm run dist:linux    # Linux   → dist/DSH-GUI-LINUX/ + .zip + .AppImage
 ```
 
-> After changing the icon, **reinstall/replace the build output**: Explorer and Maye
-> cache old icons — if a stale one still shows, restart Explorer (or delete
+> After changing the icon, **reinstall/replace the build output**: Explorer caches
+> old icons — if a stale one still shows, restart Explorer (or delete
 > `%LocalAppData%\IconCache.db`). `node scripts/ico-info.cjs build/icon.ico` prints
 > the .ico's frames.
 
