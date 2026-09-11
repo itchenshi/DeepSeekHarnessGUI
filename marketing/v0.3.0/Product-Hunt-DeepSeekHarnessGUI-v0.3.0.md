@@ -7,12 +7,13 @@
 **URL**: https://github.com/itchenshi/DeepSeekHarnessGUI
 **Topics**: Artificial Intelligence · Developer Tools · Open Source · Desktop Apps
 
-**Gallery (screenshots, English variants)**
+**Gallery (screenshots; English UI where available)**
 
-- Main window: `主窗口-english.png` — the session header showing the active model's usage / balance.
+- Main window: `主窗口-english.png` — the native window with the workspaces and session list.
 - Settings window: `设置-english.png` — engine update policy, data directory, close behavior.
 - Settings (third-party plugins): `DSH设置-english.png` — four catalog plugins, each with its own install checkbox and Enabled toggle.
-- Sidebar: `DSH侧边栏-english.png` — the embedded Harness UI in the native window.
+- Model usage, OpenCode Go plan (Chinese UI — no English capture): `模型OpenCodeGo余量.png` — the session header showing rolling / weekly / monthly usage.
+- Model balance, DeepSeek account (Chinese UI — no English capture): `模型DeepSeek余量.png` — the session header showing the account balance.
 
 **Description**
 

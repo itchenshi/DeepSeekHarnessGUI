@@ -157,11 +157,11 @@ v0.2.0 只有「安装」勾选框；v0.3.0 把**安装**和**启用**拆成两�
 
 启动后自动回到最近一次对话（由内置插件 `dsh-gui-last-session` 实现，默认生效），侧边栏与页面能力保持 Harness 原样：
 
-![DSH 侧边栏](DSH侧边栏.png)
+![DSH GUI 主窗口](主窗口.png)
 
 English 版本：
 
-![DSH 侧边栏（English）](DSH侧边栏-english.png)
+![DSH GUI 主窗口（English）](主窗口-english.png)
 
 ## 四、快速开始
 

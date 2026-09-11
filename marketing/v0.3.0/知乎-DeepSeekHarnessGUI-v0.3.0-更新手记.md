@@ -35,7 +35,7 @@ v0.3.0 就是冲着这四条去的。
 
 隐私上仍然是老规矩：`DEEPSEEK_API_KEY` 经 `ctx.credentials` 在**宿主侧**取用，请求 `GET /user/balance` 也在宿主侧发出，**密钥绝不下发浏览器**。
 
-![会话标题旁的用量与余额](DSH侧边栏.png)
+![会话标题旁的用量与余额](模型OpenCodeGo余量.png)
 
 还有一件必须自己给自己擦屁股的事：改名之后，profile 里会残留旧包名的 bundle 登记与拷贝，而启动维护只按当前目录对账、根本看不见它们——于是旧版和新版会**同时加载，用量在页面上显示两遍**。这是我第一版迁移踩的坑：当时只摘了 `dsh.profile.bundles`，忘了 `dependencies`，而引擎自己的 reconcile 会把「依赖里能解析、且声明了 `dsh.bundle`」的包重新登记回 bundles，旧包就这么复活了。
 

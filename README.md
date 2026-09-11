@@ -54,9 +54,15 @@ DSH GUI 是 [DeepSeek Harness](https://www.deepseek.com/harness/)（开源 Agent
 |---|---|
 | ![主窗口](marketing/v0.3.0/主窗口.png) | ![设置窗口](marketing/v0.3.0/设置.png) |
 
-| 设置窗口（第三方插件） | 侧边栏 |
+**模型用量与余量**（会话标题右侧，按当前模型自动切换）：用 OpenCode Go 模型时显示套餐用量，用 DeepSeek 模型时显示账户余额。
+
+| OpenCode Go 用量 | DeepSeek 余额 |
 |---|---|
-| ![DSH设置](marketing/v0.3.0/DSH设置.png) | ![DSH侧边栏](marketing/v0.3.0/DSH侧边栏.png) |
+| ![OpenCode Go 用量](marketing/v0.3.0/模型OpenCodeGo余量.png) | ![DeepSeek 余额](marketing/v0.3.0/模型DeepSeek余量.png) |
+
+| 设置窗口（第三方插件） |
+|---|
+| ![DSH设置](marketing/v0.3.0/DSH设置.png) |
 
 ---
 

@@ -16,7 +16,7 @@ Show HN: DSH GUI v0.3.0 – desktop shell for DeepSeek Harness (model usage & ba
 >
 > What carried over unchanged: a fresh in-memory session per launch (no login state on disk), the engine kept up to date at startup plus every fixed 30 minutes with an ask / silent / notify-only policy, a switchable data directory with migration, a four-plugin curated catalog (dsh-market, dsh-gui-last-session, dsh-model-usage, dsh-opencode-go-session), and a bundled portable Node v26 so end users install no runtime at all. Windows / macOS / Linux; more detail in the README.
 >
-> Screenshots (English UI): `主窗口-english.png` (main window), `设置-english.png` (settings), `DSH设置-english.png` (Harness settings), `DSH侧边栏-english.png` (sidebar).
+> Screenshots: `主窗口-english.png` (main window), `设置-english.png` (settings), `DSH设置-english.png` (Harness settings) — all English UI; the session-header usage / balance captures are Chinese UI only: `模型OpenCodeGo余量.png` (OpenCode Go plan usage), `模型DeepSeek余量.png` (DeepSeek account balance).
 >
 > MIT · unofficial independent project, not affiliated with the DeepSeek Harness team. Installers: https://github.com/itchenshi/DeepSeekHarnessGUI/releases — mirrors: GitHub https://github.com/itchenshi/DeepSeekHarnessGUI (primary), Gitee https://gitee.com/itchenshi/DeepSeekHarnessGUI, GitCode https://gitcode.com/itchenshi/DeepSeekHarnessGUI
 >
