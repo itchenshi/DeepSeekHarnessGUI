@@ -30,7 +30,13 @@ param(
   [switch]$NoPush,
   [switch]$NoBuild,
   [switch]$NoRelease,
-  [string]$NotesFile = ''
+  [string]$NotesFile = '',
+  # Platform NAMES to skip in the publish phase, e.g. -Skip GitHub when
+  # github.com is unreachable. Importantly this also prevents `gh release
+  # create` from fabricating the tag on the remote: gh creates a missing tag
+  # from the default branch, which would publish a vX.Y.Z tag pointing at the
+  # OLD commit. Skipping is the safe behaviour when the code push did not land.
+  [string[]]$Skip = @()
 )
 
 $ErrorActionPreference = 'Stop'
@@ -86,7 +92,7 @@ Write-Step "version: $version (release tag: $tag)"
 # ---------------------------------------------------------------- push -----
 if (-not $NoPush) {
   Write-Step 'pushing branch + tags to GitHub / Gitee / GitCode'
-  & powershell.exe -NoProfile -File (Join-Path $PSScriptRoot 'push-all.ps1') -SecretsFile $SecretsFile
+  & powershell.exe -NoProfile -File (Join-Path $PSScriptRoot 'push-all.ps1') -SecretsFile $SecretsFile -Skip $Skip
   if ($LASTEXITCODE -ne 0) { throw 'push-all.ps1 failed' }
   Write-Ok 'pushed to all three remotes'
 }
@@ -188,7 +194,12 @@ function Publish-GiteeLikeRelease {
     [string]$BodyFile,
     [array]$AssetFiles,
     [string]$Label,
-    [bool]$SupportsAttachments = $true
+    [bool]$SupportsAttachments = $true,
+    # Largest single attachment the platform accepts. Gitee rejects anything over
+    # 100 MB with `{"message":"验证失败：文件大小已超出限制：100 MB"}`, and our
+    # installers are 139–202 MB, so they can never be attached there. Skipping
+    # them up front turns a confusing bare 400 into an explicit, expected message.
+    [long]$MaxAssetBytes = 0
   )
   if (-not $Token) { Write-Warn "${Label}: no token, skipping publish"; return }
   $releaseUrl = "$ApiBase/repos/$Owner/$Repo/releases"
@@ -207,7 +218,14 @@ function Publish-GiteeLikeRelease {
   $createCode = $LASTEXITCODE
 
   $releaseId = $null
+  # GitCode returns the created release WITHOUT an `id` field (only tag_name,
+  # name, body, author, assets, …). Requiring an id there made a perfectly
+  # successful creation look like a failure and then fail again on the lookup.
+  # So: a create call that exits 0 is a success; the id is only needed to attach
+  # files, and GitCode does not support attachments at all.
+  $created = $false
   if ($createCode -eq 0) {
+    $created = $true
     try {
       $release = $createOut | ConvertFrom-Json
       $releaseId = $release.id
@@ -215,18 +233,18 @@ function Publish-GiteeLikeRelease {
         Write-Ok "${Label}: release created (id ${releaseId})"
       }
       else {
-        Write-Warn "${Label}: create returned no id ($createOut) - treating as existing"
+        Write-Ok "${Label}: release created (tag $Tag; platform returned no id)"
       }
     }
     catch {
-      Write-Warn "${Label}: create response parse failed: $createOut"
+      Write-Ok "${Label}: release created (unparsable response body)"
     }
   }
   else {
     Write-Warn "${Label}: create failed (exit ${createCode}): $createOut"
   }
 
-  if (-not $releaseId) {
+  if (-not $created) {
     # The tag release may already exist; reuse it instead of failing the run.
     Write-Warn "${Label}: trying to reuse existing release"
     try {
@@ -234,19 +252,34 @@ function Publish-GiteeLikeRelease {
       # otherwise PowerShell 5.1 parses `$releaseUrl?` as a drive-qualified
       # variable and mangles the resulting URI.
       $existing = Invoke-RestMethod -Method Get -Uri "${releaseUrl}`?access_token=$Token" -Headers @{ 'Content-Type' = 'application/json;charset=UTF-8' }
-      $releaseId = ($existing | Where-Object { $_.tag_name -eq $Tag } | Select-Object -First 1).id
-      if (-not $releaseId) { throw "release $Tag not found on ${Label}" }
-      Write-Ok "${Label}: reusing existing release (id ${releaseId})"
+      # Gitee returns a flat array; other v5 clones wrap the list.
+      $list = if ($existing -is [array]) { $existing }
+        elseif ($existing.releases) { @($existing.releases) }
+        elseif ($existing.data) { @($existing.data) }
+        else { @($existing) }
+      $match = $list | Where-Object { $_.tag_name -eq $Tag } | Select-Object -First 1
+      if (-not $match) { throw "release $Tag not found on ${Label}" }
+      $releaseId = $match.id
+      Write-Ok "${Label}: reusing existing release$(if ($releaseId) { " (id $releaseId)" } else { '' })"
     }
     catch {
       throw "${Label}: cannot create or find release $Tag : $($_.Exception.Message)"
     }
   }
 
+  if (-not $SupportsAttachments) {
+    Write-Warn "${Label}: platform does not support release attachments - skipping asset uploads (installers are downloadable from GitHub Releases)"
+    return
+  }
+  if (-not $releaseId) {
+    Write-Warn "${Label}: release has no id, cannot attach files - skipping asset uploads"
+    return
+  }
+
   foreach ($asset in $AssetFiles) {
-    if (-not $SupportsAttachments) {
-      Write-Warn "${Label}: platform does not support release attachments - skipping asset uploads (installers are downloadable from GitHub Releases)"
-      break
+    if ($MaxAssetBytes -gt 0 -and $asset.Length -gt $MaxAssetBytes) {
+      Write-Warn ("{0}: skipping {1} ({2:N0} bytes > platform limit {3:N0} bytes) - installers stay on GitHub Releases" -f $Label, $asset.Name, $asset.Length, $MaxAssetBytes)
+      continue
     }
     Write-Step "${Label}: uploading $($asset.Name)"
     $uploadUrl = "$ApiBase/repos/$Owner/$Repo/releases/$releaseId/attach_files"
@@ -381,39 +414,51 @@ Write-Ok "assets: $($assets.Name -join ', ')"
 # the others, so every publish is wrapped in its own try/catch below.
 $failedPlatforms = @()
 
-try {
-  Publish-GitHubRelease -Owner $owner -Repo $repo -Token $secrets['GITHUB_TOKEN'] `
-    -Tag $tag -Name $releaseName -BodyFile $bodyFile -AssetFiles $assets -Label 'GitHub'
-}
-catch {
-  Write-Warn "GitHub publish failed: $($_.Exception.Message)"
-  $failedPlatforms += 'GitHub'
-}
-
-try {
-  Publish-GiteeLikeRelease -ApiBase 'https://gitee.com/api/v5' -Owner $owner -Repo $repo `
-    -Token $secrets['GITEE_TOKEN'] -Tag $tag -Name $releaseName -BodyFile $bodyFile `
-    -AssetFiles $assets -Label 'Gitee'
-}
-catch {
-  Write-Warn "Gitee publish failed: $($_.Exception.Message)"
-  $failedPlatforms += 'Gitee'
+if ($Skip -contains 'GitHub') {
+  Write-Warn 'skipping GitHub (-Skip GitHub)'
+} else {
+  try {
+    Publish-GitHubRelease -Owner $owner -Repo $repo -Token $secrets['GITHUB_TOKEN'] `
+      -Tag $tag -Name $releaseName -BodyFile $bodyFile -AssetFiles $assets -Label 'GitHub'
+  }
+  catch {
+    Write-Warn "GitHub publish failed: $($_.Exception.Message)"
+    $failedPlatforms += 'GitHub'
+  }
 }
 
-try {
-  # GitCode releases do NOT support attachment uploads, so the body carries
-  # the changelog plus a pointer to GitHub Releases for the installers; stage
-  # that variant as its own UTF-8 file so non-ASCII notes survive.
-  $gitcodeBodyFile = Join-Path $env:TEMP "publish-gitcode-body-$Tag.txt"
-  $gitcodeNotes = $notes + "`n`n---`nInstallers: download from GitHub Releases - https://github.com/$owner/$repo/releases/tag/$tag"
-  [System.IO.File]::WriteAllText($gitcodeBodyFile, $gitcodeNotes, (New-Object System.Text.UTF8Encoding($false)))
-  Publish-GiteeLikeRelease -ApiBase 'https://api.gitcode.com/api/v5' -Owner $owner -Repo $repo `
-    -Token $secrets['GITCODE_TOKEN'] -Tag $tag -Name $releaseName -BodyFile $gitcodeBodyFile `
-    -AssetFiles $assets -Label 'GitCode' -SupportsAttachments $false
+if ($Skip -contains 'Gitee') {
+  Write-Warn 'skipping Gitee (-Skip Gitee)'
+} else {
+  try {
+    Publish-GiteeLikeRelease -ApiBase 'https://gitee.com/api/v5' -Owner $owner -Repo $repo `
+      -Token $secrets['GITEE_TOKEN'] -Tag $tag -Name $releaseName -BodyFile $bodyFile `
+      -AssetFiles $assets -Label 'Gitee'
+  }
+  catch {
+    Write-Warn "Gitee publish failed: $($_.Exception.Message)"
+    $failedPlatforms += 'Gitee'
+  }
 }
-catch {
-  Write-Warn "GitCode publish failed: $($_.Exception.Message)"
-  $failedPlatforms += 'GitCode'
+
+if ($Skip -contains 'GitCode') {
+  Write-Warn 'skipping GitCode (-Skip GitCode)'
+} else {
+  try {
+    # GitCode releases do NOT support attachment uploads, so the body carries
+    # the changelog plus a pointer to GitHub Releases for the installers; stage
+    # that variant as its own UTF-8 file so non-ASCII notes survive.
+    $gitcodeBodyFile = Join-Path $env:TEMP "publish-gitcode-body-$Tag.txt"
+    $gitcodeNotes = $notes + "`n`n---`nInstallers: download from GitHub Releases - https://github.com/$owner/$repo/releases/tag/$tag"
+    [System.IO.File]::WriteAllText($gitcodeBodyFile, $gitcodeNotes, (New-Object System.Text.UTF8Encoding($false)))
+    Publish-GiteeLikeRelease -ApiBase 'https://api.gitcode.com/api/v5' -Owner $owner -Repo $repo `
+      -Token $secrets['GITCODE_TOKEN'] -Tag $tag -Name $releaseName -BodyFile $gitcodeBodyFile `
+      -AssetFiles $assets -Label 'GitCode' -SupportsAttachments $false
+  }
+  catch {
+    Write-Warn "GitCode publish failed: $($_.Exception.Message)"
+    $failedPlatforms += 'GitCode'
+  }
 }
 
 if ($failedPlatforms.Count -gt 0) {

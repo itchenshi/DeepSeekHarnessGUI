@@ -179,7 +179,7 @@ npm start          # 启动 DSH GUI
 
 ### 方式 B：使用打包产物（终端用户）
 
-在 [GitHub Releases](https://github.com/itchenshi/DeepSeekHarnessGUI/releases) 获取对应平台产物（Gitee 镜像同步挂载 Windows 产物）：
+在 [GitHub Releases](https://github.com/itchenshi/DeepSeekHarnessGUI/releases) 获取对应平台产物（Gitee / GitCode 镜像只承载源码与发布说明，不挂安装包）：
 
 | 平台 | 产物 |
 |---|---|

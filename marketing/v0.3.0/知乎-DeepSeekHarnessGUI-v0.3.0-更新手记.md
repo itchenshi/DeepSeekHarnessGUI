@@ -110,7 +110,7 @@ v0.3.0 就是冲着这四条去的。
 | **macOS** | `DSH GUI-0.3.0-arm64.dmg`（Apple Silicon）/ `DSH GUI-0.3.0.dmg`（Intel） | |
 | **Linux** | `DSH GUI-0.3.0.AppImage` | `DSH-GUI-LINUX.zip` |
 
-各平台安装包都**捆绑了便携 Node（v26）**，终端用户不需要安装任何运行时；三平台仓库互为镜像，安装包以 GitHub Releases 为准（Gitee 同步挂载 Windows 产物）。
+各平台安装包都**捆绑了便携 Node（v26）**，终端用户不需要安装任何运行时；三平台仓库互为镜像，**安装包只挂在 GitHub Releases**（Gitee 单附件上限 100 MB、GitCode 不支持附件，而 Windows 产物有 139–202 MB，所以这两个镜像只放源码与说明）。
 
 升级很省事：**直接覆盖安装即可**，数据目录与会话记录不受影响。如果你在 v0.2.0 装过「OpenCode Go 用量」，首次启动会自动换成「模型用量与余量」，连当初「已禁用」的选择一起搬过去，不会有新旧两版同时加载的情况。图标如果还是旧的，重启一次资源管理器就好。
 

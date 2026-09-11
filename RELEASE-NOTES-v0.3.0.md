@@ -51,7 +51,9 @@
 | **Linux** | `DSH GUI-0.3.0.AppImage` | `DSH-GUI-LINUX.zip` |
 
 > 提示：各平台安装包均已捆绑便携 Node（v26），终端用户无需安装任何运行时。
-> 三平台仓库（GitHub / Gitee / GitCode）互为镜像；安装包以 GitHub Releases 为准，Gitee 同步挂载 Windows 产物。
+> 三平台仓库（GitHub / Gitee / GitCode）互为镜像；**安装包只挂在 GitHub Releases**
+> —— Gitee 单附件上限 100 MB、GitCode 不支持附件，而 Windows 产物为 139–202 MB，
+> 因此这两个镜像只承载源码与发布说明。
 
 ### 升级说明
 

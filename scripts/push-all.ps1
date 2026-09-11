@@ -15,7 +15,8 @@
 
 param(
   [string]$SecretsFile = (Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) 'push-credentials.txt'),
-  [switch]$NoTags
+  [switch]$NoTags,
+  [string[]]$Skip = @()
 )
 
 $ErrorActionPreference = 'Stop'
@@ -47,8 +48,32 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($branch)) { throw 'cann
 $tagNote = 'all tags'
 if ($NoTags) { $tagNote = 'no tags' }
 Write-Host "[plan] push branch: $branch ($tagNote)" -ForegroundColor Cyan
+if ($Skip.Count -gt 0) { Write-Host "[plan] skipping: $($Skip -join ', ')" -ForegroundColor Yellow }
+
+# Network hardening for unreliable links (measured on a restricted network where
+# github.com accepts connections but transfers stall):
+#   - HTTP/1.1: HTTP/2 to github.com was reset mid-upload; 1.1 completed.
+#   - large postBuffer: big pushes (binary assets, several MB) need it.
+#   - a LOW-SPEED limit that only trips on a genuinely stalled transfer. A short
+#     one (20s) aborts a slow-but-working push and reports a failure that is not
+#     one - that is exactly how the v0.3.0 GitHub push first appeared to fail.
+$gitNetArgs = @(
+  '-c', 'http.version=HTTP/1.1',
+  '-c', 'http.postBuffer=524288000',
+  '-c', 'http.lowSpeedLimit=1000',
+  '-c', 'http.lowSpeedTime=180'
+)
+
+# Each mirror is attempted independently: one unreachable platform must not stop
+# the others (same isolation rationale as publish-all.ps1). Failures are
+# collected and reported at the end with a non-zero exit code.
+$failures = @()
 
 foreach ($r in $remotes) {
+  if ($Skip -contains $r.Name) {
+    Write-Host "[skip] $($r.Name) (excluded by -Skip)" -ForegroundColor Yellow
+    continue
+  }
   $tokenKey = "$($r.Name)_TOKEN"
   $userKey  = "$($r.Name)_USER"
   $url = $r.Url
@@ -63,13 +88,26 @@ foreach ($r in $remotes) {
     Write-Host "[push] -> $($r.Name) (https; credential manager / interactive)" -ForegroundColor Cyan
   }
 
-  git push $url $branch
-  if ($LASTEXITCODE -ne 0) { throw "push failed: $($r.Name) branch $branch" }
+  try {
+    git @gitNetArgs push $url $branch
+    if ($LASTEXITCODE -ne 0) { throw "branch push failed (exit $LASTEXITCODE)" }
 
-  if (-not $NoTags) {
-    git push $url --tags
-    if ($LASTEXITCODE -ne 0) { throw "push failed: $($r.Name) tags" }
+    if (-not $NoTags) {
+      git @gitNetArgs push $url --tags
+      if ($LASTEXITCODE -ne 0) { throw "tag push failed (exit $LASTEXITCODE)" }
+    }
+    Write-Host "[ok]   $($r.Name)" -ForegroundColor Green
+  }
+  catch {
+    # Never echo the tokenised URL.
+    Write-Host "[fail] $($r.Name): $($_.Exception.Message)" -ForegroundColor Red
+    $failures += $r.Name
   }
 }
 
-Write-Host "[done] pushed to GitHub / Gitee / GitCode" -ForegroundColor Green
+if ($failures.Count -gt 0) {
+  Write-Host "[done] pushed with failures on: $($failures -join ', ')" -ForegroundColor Yellow
+  Write-Host "       re-run later, or exclude an unreachable mirror with -Skip <name>" -ForegroundColor Yellow
+  exit 1
+}
+Write-Host "[done] pushed to all mirrors" -ForegroundColor Green
