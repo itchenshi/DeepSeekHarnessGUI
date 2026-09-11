@@ -261,6 +261,30 @@ function Publish-GiteeLikeRelease {
       if (-not $match) { throw "release $Tag not found on ${Label}" }
       $releaseId = $match.id
       Write-Ok "${Label}: reusing existing release$(if ($releaseId) { " (id $releaseId)" } else { '' })"
+
+      # Refresh the published title/notes on a reused release. Without this a
+      # re-run against an already-published tag silently keeps the OLD body,
+      # which is how a corrected release note can stay stale forever.
+      # `tag_name` is REQUIRED by Gitee's update endpoint - omitting it returns
+      # HTTP 200 with the untouched release (a silent no-op).
+      if ($releaseId) {
+        $patchUrl = "$releaseUrl/$releaseId"
+      }
+      else {
+        # Some clones (GitCode) expose no id but accept the tag as the handle.
+        $patchUrl = "$releaseUrl/$Tag"
+      }
+      $patchOut = & curl.exe -sS -X PATCH $patchUrl `
+        --data-urlencode "access_token=$Token" `
+        --data-urlencode "tag_name=$Tag" `
+        --data-urlencode "name=$Name" `
+        --data-urlencode "body@$BodyFile" 2>&1
+      if ($LASTEXITCODE -eq 0) {
+        Write-Ok "${Label}: release notes refreshed"
+      }
+      else {
+        Write-Warn "${Label}: could not refresh release notes: $patchOut"
+      }
     }
     catch {
       throw "${Label}: cannot create or find release $Tag : $($_.Exception.Message)"
