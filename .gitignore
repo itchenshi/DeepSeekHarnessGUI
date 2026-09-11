@@ -11,3 +11,7 @@ resources/.electron-cache/
 .DS_Store
 .idea/
 .vscode/
+
+# 推广物料（各平台文章草稿、B站脚本等）只留在本地，不随仓库推送。
+# 界面截图不属于这里：它们是 README 要渲染的公开素材，放在 screenshots/。
+marketing/

@@ -47,17 +47,17 @@ Full details: [CHANGELOG.md](CHANGELOG.md) and [RELEASE-NOTES-v0.3.0.md](RELEASE
 
 | Main window | Settings window |
 |---|---|
-| ![Main window](marketing/v0.3.0/主窗口-english.png) | ![Settings window](marketing/v0.3.0/设置-english.png) |
+| ![Main window](screenshots/主窗口-english.png) | ![Settings window](screenshots/设置-english.png) |
 
 **Model usage & balance** (right of the session title, switched by the active model): OpenCode Go models show plan usage, DeepSeek models show the account balance.
 
 | OpenCode Go usage | DeepSeek balance |
 |---|---|
-| ![OpenCode Go usage](marketing/v0.3.0/模型OpenCodeGo余量.png) | ![DeepSeek balance](marketing/v0.3.0/模型DeepSeek余量.png) |
+| ![OpenCode Go usage](screenshots/模型OpenCodeGo余量.png) | ![DeepSeek balance](screenshots/模型DeepSeek余量.png) |
 
-| Settings (third-party plugins) |
+| DSH settings dialog |
 |---|
-| ![DSH Settings](marketing/v0.3.0/DSH设置-english.png) |
+| ![DSH settings dialog](screenshots/DSH设置-english.png) |
 
 ---
 
