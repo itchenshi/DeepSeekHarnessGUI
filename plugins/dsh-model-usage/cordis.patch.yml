@@ -4,15 +4,13 @@
 # session's ACTIVE model selection:
 #   - OpenCode Go models  -> plan usage (rolling / weekly / monthly percentages)
 #   - DeepSeek models     -> account balance (total / granted / topped-up)
-#   - Bailian models      -> Token Plan quota (5-hour / 1-week percentages)
 #
 # Why a plugin: both are per-account data that must be fetched server-side (the
-# API keys / AK-SK must never reach the browser), and the display belongs next
-# to the session title. Both are exactly what a host half + client half pair is
-# for.
+# API keys must never reach the browser), and the display belongs next to the
+# session title. Both are exactly what a host half + client half pair is for.
 #
 # Every section is optional and independently configured: a user with only one
-# of the keys still gets that half, and the other halves degrade to a
+# of the two keys still gets that half, and the other half degrades to a
 # diagnostic label instead of hiding the widget.
 #
 # Configuration (row `config`, all optional):
@@ -32,18 +30,6 @@
 #     providers: [string]        provider route keys that count as "DeepSeek".
 #                                Default [deepseek-official] (the route the
 #                                engine's dsh-llm-deepseek adapter registers).
-#
-#   bailian:
-#     accessKeyIdRef: string     Alibaba Cloud AccessKey ID REFERENCE (env-var
-#                                name). Default BAILIAN_ACCESS_KEY_ID.
-#     accessKeySecretRef: string Alibaba Cloud AccessKey Secret REFERENCE.
-#                                Default BAILIAN_ACCESS_KEY_SECRET.
-#     securityTokenRef: string   optional STS security token REFERENCE.
-#                                Default BAILIAN_SECURITY_TOKEN.
-#     providers: [string]        provider route keys that count as "Bailian".
-#                                Default [qwen-token-plan, qwen-token-plan-cn,
-#                                qwen-token-plan-individual] (the engine's
-#                                pi-ai catalog routes for 阿里云百炼 Token Plan).
 #
 # Legacy shorthand: a top-level `baseUrl` / `apiKeyRef` / `providers` is still
 # read as the opencodeGo section (the plugin used to be OpenCode-Go-only).

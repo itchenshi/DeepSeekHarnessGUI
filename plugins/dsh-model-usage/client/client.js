@@ -66,12 +66,6 @@ window.__ModuleLoader__.load({
       { key: 'monthly', zh: '月', en: 'Month', titleZh: '本月', titleEn: 'Monthly' },
     ]
 
-    /** Bailian (百炼) Token Plan quota windows in display order. */
-    const BAILIAN_BUCKETS = [
-      { key: 'fiveHour', zh: '5小时', en: '5h', titleZh: '5小时额度', titleEn: '5-hour quota' },
-      { key: 'oneWeek', zh: '1周', en: '1w', titleZh: '1周额度', titleEn: '1-week quota' },
-    ]
-
     /**
      * Fallback provider mapping, used only until the first host response
      * arrives (the host's `sections` wins, because it reflects configuration).
@@ -79,7 +73,6 @@ window.__ModuleLoader__.load({
     const FALLBACK_SECTIONS = {
       'opencode-go': { providers: ['opencode-go', 'opencode'] },
       deepseek: { providers: ['deepseek-official'] },
-      bailian: { providers: ['qwen-token-plan', 'qwen-token-plan-cn', 'qwen-token-plan-individual'] },
     }
 
     // --- usage store -------------------------------------------------------
@@ -218,7 +211,6 @@ window.__ModuleLoader__.load({
       __lang: 'zh-CN',
       labelOc: 'OpenCode Go',
       labelDs: 'DeepSeek',
-      labelBl: '百炼',
       noKey: '未配置密钥',
       unavailable: '用量不可用',
       balanceUnavailable: '余额不可用',
@@ -227,8 +219,6 @@ window.__ModuleLoader__.load({
       titleOcUnavailable: '暂时取不到 OpenCode Go 用量',
       titleDsBalance: 'DeepSeek 账户余额（仅在使用 DeepSeek 模型时显示）',
       titleDsUnavailable: '暂时取不到 DeepSeek 余额',
-      titleBlUsage: '百炼 Token Plan 额度（仅在使用百炼 Token Plan 模型时显示）',
-      titleBlUnavailable: '暂时取不到百炼 Token Plan 额度',
       total: '总',
       granted: '赠送',
       toppedUp: '充值',
@@ -238,7 +228,6 @@ window.__ModuleLoader__.load({
       __lang: 'en-US',
       labelOc: 'OpenCode Go',
       labelDs: 'DeepSeek',
-      labelBl: 'Bailian',
       noKey: 'no key',
       unavailable: 'usage n/a',
       balanceUnavailable: 'balance n/a',
@@ -247,8 +236,6 @@ window.__ModuleLoader__.load({
       titleOcUnavailable: 'OpenCode Go usage is temporarily unavailable',
       titleDsBalance: 'DeepSeek account balance (shown only while a DeepSeek model is active)',
       titleDsUnavailable: 'DeepSeek balance is temporarily unavailable',
-      titleBlUsage: 'Bailian Token Plan quota (shown only while a Bailian Token Plan model is active)',
-      titleBlUnavailable: 'Bailian Token Plan quota is temporarily unavailable',
       total: 'total',
       granted: 'granted',
       toppedUp: 'topped up',
@@ -268,13 +255,13 @@ window.__ModuleLoader__.load({
       })
     }
 
-    /** Quota-window percentages shared by the OpenCode Go and Bailian sections. */
-    function renderBuckets(section, t, zh, buckets, labelKey, titleKey) {
+    /** OpenCode Go: rolling / weekly / monthly percentages. */
+    function renderOpenCodeGo(section, t, zh) {
       if (!section || section.ok !== true || !section.usage) {
-        return renderUnavailable(t, section?.reason, t(`${titleKey}Unavailable`))
+        return renderUnavailable(t, section?.reason, t('titleOcUnavailable'))
       }
       const parts = []
-      for (const bucket of buckets) {
+      for (const bucket of BUCKETS) {
         const b = section.usage[bucket.key]
         if (!b) continue
         const tip =
@@ -296,23 +283,13 @@ window.__ModuleLoader__.load({
           ),
         )
       }
-      if (parts.length === 0) return renderUnavailable(t, 'bad-payload', t(`${titleKey}Unavailable`))
+      if (parts.length === 0) return renderUnavailable(t, 'bad-payload', t('titleOcUnavailable'))
       return jsx.jsxs('span', {
         className: 'model-usage',
-        title: t(titleKey),
+        title: t('titleOcUsage'),
         style: S_WRAP,
-        children: [jsx.jsx('span', { style: S_DIM, children: t(labelKey) }), ...parts],
+        children: [jsx.jsx('span', { style: S_DIM, children: t('labelOc') }), ...parts],
       })
-    }
-
-    /** OpenCode Go: rolling / weekly / monthly percentages. */
-    function renderOpenCodeGo(section, t, zh) {
-      return renderBuckets(section, t, zh, BUCKETS, 'labelOc', 'titleOcUsage')
-    }
-
-    /** Bailian (百炼): Token Plan 5-hour / 1-week quota percentages. */
-    function renderBailian(section, t, zh) {
-      return renderBuckets(section, t, zh, BAILIAN_BUCKETS, 'labelBl', 'titleBlUsage')
     }
 
     /** DeepSeek: account balance amounts. */
@@ -421,7 +398,6 @@ window.__ModuleLoader__.load({
       if (state.status !== 'ready' && state.status !== 'error') return null
 
       if (sectionKey === 'deepseek') return renderDeepSeek(section, t, zh)
-      if (sectionKey === 'bailian') return renderBailian(section, t, zh)
       return renderOpenCodeGo(section, t, zh)
     }
 
