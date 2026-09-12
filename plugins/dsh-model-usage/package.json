@@ -1,7 +1,7 @@
 {
   "name": "dsh-model-usage",
-  "version": "0.2.0",
-  "description": "DeepSeek Harness plugin: shows model usage and account balance in the session header — OpenCode Go plan usage (rolling / weekly / monthly) and DeepSeek account balance — each only while a matching model is the active selection.",
+  "version": "0.3.0",
+  "description": "DeepSeek Harness plugin: shows model usage and account balance in the session header — OpenCode Go plan usage (rolling / weekly / monthly), DeepSeek account balance, and Bailian (百炼) Token Plan quota (5-hour / 1-week) — each only while a matching model is the active selection.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -29,6 +29,9 @@
     "opencode",
     "opencode-go",
     "deepseek",
+    "bailian",
+    "qwen",
+    "token-plan",
     "usage",
     "quota",
     "balance"

@@ -7,11 +7,13 @@ session header, gated on the session's **active model selection**:
 |---|---|---|
 | `opencode-go` / `opencode` | OpenCode Go plan usage — rolling / weekly / monthly **percentages** + reset time | `GET https://opencode.ai/zen/go/v1/usage` |
 | `deepseek-official` | DeepSeek account **balance** — total / granted / topped-up | `GET https://api.deepseek.com/user/balance` |
+| `qwen-token-plan` / `qwen-token-plan-cn` / `qwen-token-plan-individual` | Bailian (百炼) Token Plan quota — 5-hour / 1-week **percentages** + reset time | Alibaba Cloud console gateway (AK/SK → CLI access token) |
 
 ```
 ┌─ session header ─────────────────────────────────────────────────────┐
 │  My conversation title  [OpenCode Go ┄⑃ 滚动 18% 周 82% 月 42%]  打开功能 ▾ │
 │  Another conversation   [DeepSeek ¥110.00]                        打开功能 ▾ │
+│  Qwen session           [百炼 5小时 50% 1周 25%]                  打开功能 ▾ │
 └──────────────────────────────────────────────────────────────────────┘
         slot: conversation.session.header.actions
 ```
@@ -52,8 +54,9 @@ therefore takes effect without touching client code.
 | Client | `client/client.js` | Browser | Registers the header widget, polls the host route, gates on the active model. |
 
 API keys never reach the browser: the host half resolves them through
-`ctx.credentials` by reference (`OPENCODE_GO_API_KEY`, `DEEPSEEK_API_KEY`) and
-calls the upstream.
+`ctx.credentials` by reference (`OPENCODE_GO_API_KEY`, `DEEPSEEK_API_KEY`,
+`BAILIAN_ACCESS_KEY_ID`, `BAILIAN_ACCESS_KEY_SECRET`, `BAILIAN_SECURITY_TOKEN`)
+and calls the upstream.
 
 ## Host route
 
@@ -63,17 +66,19 @@ GET /model-usage
   "ok": true,
   "sections": {
     "opencode-go": { "providers": ["opencode-go","opencode"], "keyRef": "OPENCODE_GO_API_KEY" },
-    "deepseek":    { "providers": ["deepseek-official"],    "keyRef": "DEEPSEEK_API_KEY" }
+    "deepseek":    { "providers": ["deepseek-official"],    "keyRef": "DEEPSEEK_API_KEY" },
+    "bailian":     { "providers": ["qwen-token-plan","qwen-token-plan-cn","qwen-token-plan-individual"], "keyRefs": ["BAILIAN_ACCESS_KEY_ID","BAILIAN_ACCESS_KEY_SECRET","BAILIAN_SECURITY_TOKEN"] }
   },
   "opencode-go": { "ok": true, "usage":   { "rolling": {…}, "weekly": {…}, "monthly": {…} }, "fetchedAt": 1700000000000 },
-  "deepseek":    { "ok": true, "balance": { "isAvailable": true, "infos": [ { "currency":"CNY", "total":"110.00", "granted":"10.00", "toppedUp":"100.00" } ] }, "fetchedAt": 1700000000000 }
+  "deepseek":    { "ok": true, "balance": { "isAvailable": true, "infos": [ { "currency":"CNY", "total":"110.00", "granted":"10.00", "toppedUp":"100.00" } ] }, "fetchedAt": 1700000000000 },
+  "bailian":     { "ok": true, "usage":   { "fiveHour": { "percent": 50, "resetsAt": "…" }, "oneWeek": { "percent": 25, "resetsAt": "…" } }, "fetchedAt": 1700000000000 }
 }
 ```
 
 The per-section entries are keyed by **section key** — the same keys as `sections`, which is what the page half indexes with (the camelCase `opencodeGo` / `deepseek` names are the *config* keys in `cordis.patch.yml`, not the wire keys).
 
-Each section reports **its own** outcome, so a user with only one of the two keys
-still gets that half; the other half degrades to a diagnostic label
+Each section reports **its own** outcome, so a user with only one of the keys
+still gets that half; the other halves degrade to a diagnostic label
 (`{"ok":false,"reason":"no-key|unauthorized|network|timeout|bad-payload"}`)
 instead of hiding the widget.
 
@@ -97,6 +102,33 @@ Authorization: Bearer <DEEPSEEK_API_KEY>
      "balance_infos":[{"currency":"CNY","total_balance":"110.00",
                        "granted_balance":"10.00","topped_up_balance":"100.00"}]}
 ```
+
+**Bailian (百炼) Token Plan quota** — Bailian has no "Bearer key → GET balance"
+endpoint, so this section reproduces the official `bailian-cli`
+([modelstudioai/cli](https://github.com/modelstudioai/cli), MIT) flow:
+
+1. Exchange the Alibaba Cloud OpenAPI AK/SK for a temporary CLI access token
+   (ACS3-HMAC-SHA256-signed request):
+   ```
+   POST https://modelstudio.cn-beijing.aliyuncs.com/modelstudio/cli/generateAccessToken
+   x-acs-action: GenerateCLIAccessToken
+   x-acs-version: 2026-02-10
+   200 {"cliAccessToken":"..."}
+   ```
+2. Ask the Bailian console gateway for Token Plan usage:
+   ```
+   POST https://bailian-cs.console.aliyun.com/cli/api.json
+        ?action=BroadScopeAspnGateway&product=sfm_bailian
+        &api=zeldaHttp.apikeyMgr.%2Ftokenplan%2Fpersonal%2Fapi%2Fv2%2Fusage
+   Authorization: Bearer <cliAccessToken>
+   form: params=<JSON gateway body>&region=cn-beijing
+   200 {"data":{"DataV2":{"data":{"data":{
+         "per5HourPercentage":0.5,"per5HourResetTime":1786000000000,
+         "per1WeekPercentage":0.25,"per1WeekResetTime":1786100000000}}}}}
+   ```
+   Percentages arrive as ratios in [0,1] (0.5 = 50% used); reset times are
+   epoch milliseconds. A `NotLogined` gateway error (expired/rejected token)
+   degrades to `reason:"unauthorized"`.
 
 The host normalizes and clamps the usage payload (percent 0–100) and normalizes
 the balance amounts (the upstream sends decimal **strings**; finite numbers are
@@ -133,10 +165,25 @@ The plugin row lives in `cordis.patch.yml`; every key is optional:
           baseUrl: https://api.deepseek.com        # upstream root
           apiKeyRef: DEEPSEEK_API_KEY              # credential reference
           providers: [deepseek-official]           # the engine's DeepSeek route
+
+        bailian:
+          accessKeyIdRef: BAILIAN_ACCESS_KEY_ID      # Alibaba Cloud AccessKey ID
+          accessKeySecretRef: BAILIAN_ACCESS_KEY_SECRET  # Alibaba Cloud AccessKey Secret
+          securityTokenRef: BAILIAN_SECURITY_TOKEN   # optional STS token
+          providers:                                  # routes treated as Bailian
+            - qwen-token-plan          # 国际站 Token Plan
+            - qwen-token-plan-cn       # 国内站 Token Plan
+            - qwen-token-plan-individual  # 个人版 Token Plan
 ```
 
 A top-level `baseUrl` / `apiKeyRef` / `providers` is still read as the
 `opencodeGo` section (this plugin used to be OpenCode-Go-only).
+
+> The Bailian section needs the engine's `dsh-credentials` service to know
+> `BAILIAN_ACCESS_KEY_ID` / `BAILIAN_ACCESS_KEY_SECRET` (create the keys in the
+> Alibaba Cloud console — RAM user with access to Bailian — and add them as
+> credentials like the DeepSeek key). Without them the widget shows
+> `未配置密钥` for live Bailian sessions; the other two sections are unaffected.
 
 ## Development
 
